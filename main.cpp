@@ -3,11 +3,10 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include <map>
+#include <algorithm>
 #include <experimental/optional>
 #include <experimental/filesystem>
 
-#include "MemoryMapped.h"
 
 using namespace std;
 using std::experimental::optional;
@@ -21,6 +20,7 @@ struct measurement
 
 struct dataset
 {
+    optional<long> idx;
     float x;
 //     char padding[64-sizeof(float)];
     float y;
@@ -28,6 +28,11 @@ struct dataset
     
     vector<measurement> extend;
     vector<measurement> retract;
+    
+    // cuda adress space
+    size_t cuBufLen;
+    measurement* cuExtend;
+    measurement* cuRetract;
 };
 
 vector<string> split_str(const char *str, char c = ' ')
@@ -47,26 +52,7 @@ vector<string> split_str(const char *str, char c = ' ')
     return result;
 }
 
-vector<string> split_file_to_lines(const char* str, size_t size, char c='\n')
-{
-    vector<string> result;
-    result.reserve(800); // there will be 700 lines in file
-
-    const char* end = str + size;
-    do
-    {
-        const char *begin = str;
-
-        while(*str != c && *str)
-            str++;
-
-        result.push_back(string(begin, str));
-    } while (end > str++);
-
-    return result;
-}
-
-void parse_lines(const vector<string>& lines, optional<int>& idx_out, dataset& data_out)
+void parse_lines(const vector<string>& lines, dataset& data_out)
 {
     bool reading_extend_section = true;
     string str_to_parse;
@@ -80,14 +66,14 @@ void parse_lines(const vector<string>& lines, optional<int>& idx_out, dataset& d
             {
                 if(tokens[1] == "index:")
                 {
-                    int val = stoi(tokens[2]);
-                    if(!idx_out)
+                    long val = stol(tokens[2]);
+                    if(!data_out.idx)
                     {
-                        idx_out = val;
+                        data_out.idx = val;
                     }
                     else
                     {
-                        if(*idx_out != val)
+                        if(*data_out.idx != val)
                         {
                             throw runtime_error("file corrupt, index changed!");
                         }
@@ -106,25 +92,25 @@ void parse_lines(const vector<string>& lines, optional<int>& idx_out, dataset& d
                         data_out.y = val;
                     }
                 }
-                else if(tokens[1] == "segment:")
+                else if(tokens[1] == "segment")
                 {
-                    if(tokens[2] == "extend")
+                    if(tokens[2].find("extend") != string::npos)
                     {
                         reading_extend_section = true;
                     }
-                    else if(tokens[2] == "retract")
+                    else if(tokens[2].find("retract") != string::npos)
                     {
                         reading_extend_section = false;
                     }
                     else
                     {
-                        throw runtime_error("file corrupt, unknown segment: " + tokens[2]);
+                        throw runtime_error("file corrupt, unknown segment: '" + tokens[2]+"'");
                     }
                 }
             }
             else
             {
-                if(idx_out)
+                if(data_out.idx)
                 {
                     measurement m;
                     m.z = std::stof(str_to_parse=tokens[0]);
@@ -140,7 +126,7 @@ void parse_lines(const vector<string>& lines, optional<int>& idx_out, dataset& d
     }
 }
 
-vector<string> parse_file_2(const path& path)
+vector<string> parse_file(const path& path)
 {
     ifstream inp(path);
     if(!inp.is_open())
@@ -160,21 +146,11 @@ vector<string> parse_file_2(const path& path)
     return lines;
 }
 
-vector<string> parse_file(const path& path)
-{
-    MemoryMapped inp(path, MemoryMapped::MapRange::WholeFile, MemoryMapped::CacheHint::SequentialScan);
-    
-    string line;
-    
-    const size_t size = inp.mappedSize();
-    vector<string> lines = split_file_to_lines(reinterpret_cast<const char*>(inp.getData()), size);
-    
-    return lines;
-}
+
 
 int main(int argc, char** argv)
 {
-    std::map<int, dataset> datasets;
+    std::vector<dataset> datasets;
     
 
     #pragma omp parallel
@@ -188,27 +164,17 @@ int main(int argc, char** argv)
                 {
                     if(is_regular_file(dirEntry.status()))
                     {
-    //                         parse_file(dirEntry.path(), datasets);
-    //                         cout << std::quoted(string(dirEntry.path())) << "\n";
                         #pragma omp task
                         {
                             vector<string> tmp;
-                            tmp = parse_file_2(dirEntry.path());
+                            tmp = parse_file(dirEntry.path());
                             
-                            optional<int> idx;
                             dataset data;
-                            parse_lines(tmp, idx, data);
+                            parse_lines(tmp, data);
                             
-                            if(idx)
+                            #pragma omp critical
                             {
-                                #pragma omp critical
-                                {
-                                    datasets[*idx] = data;
-                                }
-                            }
-                            else
-                            {
-                                cerr << "warning: no index found in file " << std::quoted(string(dirEntry.path())) << endl;
+                                datasets.push_back(data);
                             }
                         }
                     }
@@ -220,7 +186,18 @@ int main(int argc, char** argv)
             }
         }
         
-        cudaAnalyse(datasets);
+        auto my_comp = [](const measurement &a, const measurement &b){ return a.z < b.z; };
+	#pragma omp for schedule(static)
+	for(size_t i=0; i<datasets.size(); i++)
+	{
+	    std::reverse(datasets[i].extend.begin(),datasets[i].extend.end());
+	    // data should already be sorted, just to be sure
+	    std::sort(datasets[i].extend.begin(),   datasets[i].extend.end(), my_comp); // sort ascending acc. to height z
+	    std::sort(datasets[i].retract.begin(),   datasets[i].retract.end(), my_comp); // sort ascending acc. to height z
+	}
     }
+    
+    
+//     cudaAnalyse(datasets);
 }
 
