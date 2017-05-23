@@ -30,8 +30,10 @@ struct dataset
     vector<measurement> retract;
     
     // cuda adress space
-    size_t cuBufLen;
+    size_t cuExtendLen;
     measurement* cuExtend;
+    
+    size_t cuRetractLen;
     measurement* cuRetract;
 };
 
@@ -191,9 +193,18 @@ int main(int argc, char** argv)
 	for(size_t i=0; i<datasets.size(); i++)
 	{
 	    std::reverse(datasets[i].extend.begin(),datasets[i].extend.end());
+        
 	    // data should already be sorted, just to be sure
 	    std::sort(datasets[i].extend.begin(),   datasets[i].extend.end(), my_comp); // sort ascending acc. to height z
 	    std::sort(datasets[i].retract.begin(),   datasets[i].retract.end(), my_comp); // sort ascending acc. to height z
+        
+        size_t len = datasets[i].cuExtendLen = datasets[i].extend.size();
+        cudaMalloc(static_cast<void ∗∗>(&datasets[i].cuExtend), len);
+        cudaMemcpy( datasets[i].cuExtend, datasets[i].extend.data(), len, cudaMemcpyHostToDevice);
+
+        len = datasets[i].cuRetractLen = datasets[i].retract.size();
+        cudaMalloc(static_cast<void ∗∗>(&datasets[i].cuRetractLen), len);
+        cudaMemcpy( datasets[i].cuRetractLen, datasets[i].retract.data(), len, cudaMemcpyHostToDevice);
 	}
     }
     
