@@ -1,3 +1,6 @@
+
+// compile with: /usr/local/cuda/bin/nvcc -ccbin clang++ main.cpp -o main -Xcompiler "-std=c++1z" -lstdc++fs
+
 #include <iostream>
 #include <iomanip>
 #include <fstream>
@@ -6,6 +9,8 @@
 #include <algorithm>
 #include <experimental/optional>
 #include <experimental/filesystem>
+
+#include <cuda.h>
 
 
 using namespace std;
@@ -199,12 +204,12 @@ int main(int argc, char** argv)
 	    std::sort(datasets[i].retract.begin(),   datasets[i].retract.end(), my_comp); // sort ascending acc. to height z
         
         size_t len = datasets[i].cuExtendLen = datasets[i].extend.size();
-        cudaMalloc(static_cast<void ∗∗>(&datasets[i].cuExtend), len);
-        cudaMemcpy( datasets[i].cuExtend, datasets[i].extend.data(), len, cudaMemcpyHostToDevice);
+        cudaMalloc(&datasets[i].cuExtend, len);
+        cudaMemcpy( datasets[i].cuExtend, datasets[i].extend.data(), len, ::cudaMemcpyHostToDevice);
 
         len = datasets[i].cuRetractLen = datasets[i].retract.size();
-        cudaMalloc(static_cast<void ∗∗>(&datasets[i].cuRetract), len);
-        cudaMemcpy( datasets[i].cuRetract, datasets[i].retract.data(), len, cudaMemcpyHostToDevice);
+        cudaMalloc(&datasets[i].cuRetract, len);
+        cudaMemcpy( datasets[i].cuRetract, datasets[i].retract.data(), len, ::cudaMemcpyHostToDevice);
 	}
     }
     
