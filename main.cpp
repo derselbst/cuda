@@ -203,12 +203,19 @@ int main(int argc, char** argv)
         cudaMemcpy( datasets[i].cuExtend, datasets[i].extend.data(), len, cudaMemcpyHostToDevice);
 
         len = datasets[i].cuRetractLen = datasets[i].retract.size();
-        cudaMalloc(static_cast<void ∗∗>(&datasets[i].cuRetractLen), len);
-        cudaMemcpy( datasets[i].cuRetractLen, datasets[i].retract.data(), len, cudaMemcpyHostToDevice);
+        cudaMalloc(static_cast<void ∗∗>(&datasets[i].cuRetract), len);
+        cudaMemcpy( datasets[i].cuRetract, datasets[i].retract.data(), len, cudaMemcpyHostToDevice);
 	}
     }
     
     
 //     cudaAnalyse(datasets);
+
+    for(size_t i=0; i<datasets.size(); i++)
+    {
+        cudaFree(datasets[i].cuExtend);
+        cudaFree(datasets[i].cuRetract);
+    }
+
 }
 
