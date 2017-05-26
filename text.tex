@@ -4,7 +4,7 @@ geg: datensätze: ergebnisse der abtastung von oberflächen in der elektronen mi
 
 jeder datensatz enthält für eine x und y position (i.e. position auf der oberfläche) die höhe der abgetasteten fläche und die der abtastspitze entgegengebrachte kraft
 
-es existieren 256 x 256 datensätze, also 65536 datensätze mit je ca. 600 messwerten.
+es existieren 256 x 256 datensätze, also 65536 datensätze mit je ca. 600 messwerten, d.h. 2*300 Messwerte für einen absenkteil und zurückzieher teil.
 
 messwerte jedes datensatzes ergeben kurve
 
@@ -16,7 +16,38 @@ messwerte jedes datensatzes ergeben kurve
  ^
  annäherung der probe
        ^
-       kontakt punkt
+       kontakt punkt (adhäsionskräfte)
          ^ entgegengebrachte kraft
          
-zerlegung dieser kurve in drei lineare funktionen zwecks bestimmung: kontaktpunkt
+gegebenen datenpunkte sind mittels polyfit  in drei lineare zu approximieren. anschließend anhand der drei approximierten funktionen: bestimmung: kontaktpunkt, ansteig kurve entgegenbebrachte kraft, split index
+
+herangehensweise: 
+parsen der daten:
+daten liegen als csv dateien vor, deren messwerte spalten und zeilenweise gespeichert sind. diese 100KB kleinen textdateien einlesen und verarbeiten.
+problem: hoher overhead seitens des OS aufgrund häufigem öffnen / schliessen der dateien. dateien sind klein und ein großteil des inhalts wird ignoriert, da nicht relevant --> erschwert caching dur das OS.
+
+parallelisierungsmodell:
+aufgrund der hohen anzahl an datensätzen: naive parallelisierung: jeder thread der graka bearbeitet einen datensatz. konkret:
+- gegebene punktwolke ableiten um den kontaktpunkt zu bestimmen
+- polyfit der kurve nach kontakt mit medium durchführen
+- ermittlung des split index
+- polyfit der kurven vor und nach dem split index durchführen
+
+datenmodell:
+einlesen der daten als AoS:
+
+struct tuple_t { float z,f; };
+tuple_t datasets[M][N];
+
+N: anzahl an datensätze
+M: anzahl an messwerten pro datensatz
+
+für grafikkarten ungeeignet, da daten für die einzelene threads zu weit auseinander liegen. caching wird unmöglich, schlimmsten falls führt dies zu einer ausserialisierung der threads.
+
+daher: datensätze columnmajor im speicher ablegen:
+
+struct tuple_t { float z,f; };
+tuple_t datasets[N][M];
+
+jeder thread bearbeitet einen datensatz. daher sieht es für jeden thread so aus, als handle es sich bei datasets um ein SoA. d.h. beim ersten zugriff auf datasets liest jeder thread die erste messreihe seines datensatzes ein, beim zweiten zugriff die zweite messreihe, etc.
+
