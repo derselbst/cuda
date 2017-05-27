@@ -17,29 +17,14 @@ using namespace std;
 using std::experimental::optional;
 using namespace std::experimental::filesystem;
 
-struct measurement
-{
-    float z;
-    float force;
-};
-
 struct dataset
 {
     optional<long> idx;
     float x;
-//     char padding[64-sizeof(float)];
     float y;
-//     char padding2[64-sizeof(float)];
 
-    vector<measurement> extend;
-    vector<measurement> retract;
-
-    // cuda adress space
-    size_t cuExtendLen;
-    measurement* cuExtend;
-
-    size_t cuRetractLen;
-    measurement* cuRetract;
+    vector<point_t> extend;
+    vector<point_t> retract;
 };
 
 vector<string> split_str(const char *str, char c = ' ')
@@ -119,7 +104,7 @@ void parse_lines(const vector<string>& lines, dataset& data_out)
             {
                 if(data_out.idx)
                 {
-                    measurement m;
+                    point_t m;
                     m.z = std::stof(str_to_parse=tokens[0]);
                     m.force = std::stof(str_to_parse=tokens[1]);
 
@@ -158,7 +143,8 @@ vector<string> parse_file(const path& path)
 int main(int argc, char** argv)
 {
     std::vector<dataset> datasets;
-
+    size_t nSets = 0;
+    size_t nValues = 0;
 
     #pragma omp parallel
     {
@@ -193,36 +179,46 @@ int main(int argc, char** argv)
             }
         }
 
-        auto my_comp = [](const measurement &a, const measurement &b) {
-            return a.z < b.z;
-        };
+        auto my_comp = [](const point_t &a, const point_t &b) { return a.z < b.z; };
+        nSets = datasets.size();
+        nValues = 0;
         #pragma omp for schedule(static)
-        for(size_t i=0; i<datasets.size(); i++)
+        for(size_t i=0; i<nSets; i++)
         {
             std::reverse(datasets[i].extend.begin(),datasets[i].extend.end());
 
             // data should already be sorted, just to be sure
-            std::sort(datasets[i].extend.begin(),   datasets[i].extend.end(), my_comp); // sort ascending acc. to height z
-            std::sort(datasets[i].retract.begin(),   datasets[i].retract.end(), my_comp); // sort ascending acc. to height z
+            std::sort(datasets[i].extend.begin(),  datasets[i].extend.end(), my_comp); // sort ascending acc. to height z
+            std::sort(datasets[i].retract.begin(), datasets[i].retract.end(), my_comp); // sort ascending acc. to height z
 
-            size_t len = datasets[i].cuExtendLen = datasets[i].extend.size();
-            cudaMalloc(&datasets[i].cuExtend, len);
-            cudaMemcpy( datasets[i].cuExtend, datasets[i].extend.data(), len, ::cudaMemcpyHostToDevice);
-
-            len = datasets[i].cuRetractLen = datasets[i].retract.size();
-            cudaMalloc(&datasets[i].cuRetract, len);
-            cudaMemcpy( datasets[i].cuRetract, datasets[i].retract.data(), len, ::cudaMemcpyHostToDevice);
+            nValues = max(nValues, max(datasets[i].extend.size(), datasets[i].retract.size()));
         }
     }
-
-
-//     cudaAnalyse(datasets);
-
-    for(size_t i=0; i<datasets.size(); i++)
+    
+    const size_t columns = 2*nSets;
+    const size_t rows =  nValues+1;
+    point_t* cuda_mem = new point_t[columns * rows];
+    for(size_t i=0; i<nSets; i++)
     {
-        cudaFree(datasets[i].cuExtend);
-        cudaFree(datasets[i].cuRetract);
+        dataset& set = datasets[i];
+        
+        if(*set.idx != i)
+        {
+            cerr << "warning: idx differ, expected " << i << " actual " << *set.idx << endl;
+        }
+        
+        
+        cuda_mem[i*2 + 0*columns].n = set.extend[j].size();
+        for(size_t j=0; j<set.extend.size(); j++)
+        {
+            cuda_mem[i*2 + (j+1)*columns] = set.extend[j];
+        }
+        
+        cuda_mem[(i*2+1) + 0*columns].n = set.retract[j].size();
+        for(size_t j=0; j<set.retract.size(); j++)
+        {
+            cuda_mem[(i*2+1) + (j+1)*columns] = set.retract[j];
+        }
     }
-
 }
 
