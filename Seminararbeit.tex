@@ -1,0 +1,278 @@
+\documentclass[a4paper,oneside,numbers=noenddot,fontsize=12pt,open=right]{scrreprt}
+\usepackage{ngerman}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% do not use bitmap font, use vector font
+\usepackage{lmodern}
+
+% für ordentliche tabellen
+\usepackage{tabularx}
+
+\usepackage{multirow}
+
+\usepackage[hyperfootnotes=false]{hyperref}
+
+% für korrekten zeilenabstand
+\usepackage{setspace}
+
+% festlegung bibtex style
+\bibliographystyle{alpha}
+
+% fortlaufende nummerierung aller abb und fußnoten
+\usepackage{chngcntr}
+\counterwithout{footnote}{chapter}
+\counterwithout{figure}{chapter}
+
+% seitenränder
+\usepackage{geometry}
+\geometry{a4paper,left=30mm,right=20mm, top=25mm, bottom=25mm}
+
+% um grafiken zu includieren
+\usepackage{graphicx}
+
+% für checkboxen
+\usepackage{amssymb}
+
+% für graphen
+%\usepackage{tikz}
+%\usetikzlibrary{arrows}
+%sequenzdiagramm
+%\usepackage{pgf-umlsd} 
+
+% einbettung von quelltext
+\usepackage{listings}
+\usepackage{colortbl}
+\usepackage{xcolor}
+
+% für tabellen im querformat
+\usepackage{pdflscape}
+
+% für hübsche ja und nein symbole
+\usepackage{pifont}
+\newcommand{\cmark}{\textcolor{green}{\ding{51}}}
+\newcommand{\xmark}{\textcolor{red}{\ding{55}}}
+
+% custom fontsizes
+\usepackage{anyfontsize}
+
+% seitenhintergrundbilder
+% für diesen bescheuerten sperrvermerk
+%\usepackage{wallpaper}
+%\usepackage[firstpage]{draftwatermark}
+
+%\SetWatermarkText{~SPERRVERMERK}
+%\SetWatermarkScale{0.6}
+%\SetWatermarkAngle{50}
+
+% für anforderungsanalyse
+\newcounter{anforderung}
+\newcommand{\anf}[1]
+{
+    \refstepcounter{anforderung}
+%    (A\arabic{anforderung})
+    \subsubsection*{UC--\arabic{anforderung} #1}
+    \label{UC:\arabic{anforderung}}
+}
+
+\newcommand{\state}[3]
+{
+\subsubsection*{#1}
+%~\\
+%
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline 
+\textbf{Beschreibung:} & {#2} \\
+\hline 
+\textbf{Eigenschaften:} & {#3} \\
+\hline
+\end{tabularx}
+\\\\
+}
+
+\newcommand{\anfanf}[4]
+{
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline 
+\textbf{Frequenz:} & {#1} \\
+\hline 
+%\textbf{Akteur:} &    \\
+\textbf{Beschreibung:} & {#2} \\
+\hline 
+\textbf{Bedingung:} & {#3} \\
+\hline 
+\textbf{Ergebnis:} & {#4} \\
+\hline
+\end{tabularx}
+\\\\
+}
+
+\newcommand{\refanf}[1]
+{UC--\ref{#1}}
+
+% nomain, if you define glossaries in a file, and you use \include{INP-00-glossary}
+%\usepackage[
+%nonumberlist, %keine Seitenzahlen anzeigen
+%acronym,      %ein Abkürzungsverzeichnis erstellen
+%nopostdot,
+%toc]          %Einträge im Inhaltsverzeichnis
+%%section      %im Inhaltsverzeichnis auf section-Ebene erscheinen
+%{glossaries}
+
+%\makeglossaries
+%\input{glossary}
+
+
+\definecolor{mygreen}{rgb}{0,0.6,0}
+
+% damit der quellcode nicht mit "Listing: x" gekennzeichnet wird
+\renewcommand{\lstlistingname}{Codefragment}
+\lstset {
+    backgroundcolor=\color{white},   % choose the background color; you must add \usepackage{color} or \usepackage{xcolor}
+  basicstyle=\footnotesize,        % the size of the fonts that are used for the code
+  breakatwhitespace=false,         % sets if automatic breaks should only happen at whitespace
+  breaklines=true,                 % sets automatic line breaking
+  captionpos=b,                    % sets the caption-position to bottom
+  commentstyle=\color{mygreen},    % comment style
+  deletekeywords={...},            % if you want to delete keywords from the given language
+  escapeinside={\%*}{*)},          % if you want to add LaTeX within your code
+  extendedchars=true,              % lets you use non-ASCII characters; for 8-bits encodings only, does not work with UTF-8
+  frame=single,                    % adds a frame around the code
+  identifierstyle=\color{black},
+  keepspaces=true,                 % keeps spaces in text, useful for keeping indentation of code (possibly needs columns=flexible)
+  keywordstyle=\color{blue},       % keyword style
+%  language=[GNU]C++,                 % the language of the code
+  language=[Sharp]C,                 % the language of the code
+  morekeywords={*,...},            % if you want to add more keywords to the set
+  numbers=left,                    % where to put the line-numbers; possible values are (none, left, right)
+  numbersep=5pt,                   % how far the line-numbers are from the code
+  numberstyle=\tiny\color{gray}, % the style that is used for the line-numbers
+  numberbychapter = false,         % false: fortlaufende nummerierung aller listings
+  rulecolor=\color{black},         % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
+  showspaces=false,                % show spaces everywhere adding particular underscores; it overrides 'showstringspaces'
+  showstringspaces=false,          % underline spaces within strings only
+  showtabs=false,                  % show tabs within strings adding particular underscores
+  stepnumber=2,                    % the step between two line-numbers. If it's 1, each line will be numbered
+  stringstyle=\color{orange},     % string literal style
+  tabsize=3,                       % sets default tabsize to 2 spaces
+  title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
+}
+
+\setcounter{tocdepth}{3}
+\setcounter{secnumdepth}{3}
+
+\title{\thema}
+
+\def \author{Tom Möbert}
+\def \matrikelnummer{167510}
+\def \betrieb{Carl Zeiss SMT GmbH}
+\def \hochschule{Friedrich Schiller Universität Jena}
+\def \hochschuleGenitivS{\hochschule}
+\def \fmi{Fakultät für Mathematik und Informatik}
+\def \studienbereich{Technik}
+\def \studiengang{Informatik}
+\def \arbeit{Seminararbeit}
+\def \apfelsaftpresse{\gls{sda}}
+\def \apfel{\acrshort{sda}}
+
+\def \aimseuv{AIMS\texttrademark~EUV}
+\def \thema{Grafikkartenprogrammierung mit Cuda}
+\def \prove{PROVE\textsuperscript{\textregistered}}
+\begin{document}
+\begin{titlepage}
+%\ThisLRCornerWallPaper{1}{img/Sperrvermerk.pdf}
+    \begin{center}
+    ~\vspace{1cm}\\
+   {\fontsize{35}{45}\selectfont \textbf{\MakeUppercase \arbeit}}\\
+    ~\vspace{0.5cm}\\
+    zum Thema\\
+    ~\vspace{0.5cm}\\
+%    \begin{LARGE}
+    \textbf{\glqq\thema\grqq}\\
+%    \end{LARGE}  \\
+    ~\vspace{0.5cm}\\
+    vorgelegt an der\\
+    {\fmi}\\
+    {der \hochschuleGenitivS}
+    \vspace{2cm}
+
+ \normalsize{
+    \begin{tabular}{lrl}
+    	\textbf{von:} &~& {\author} \\
+    	&~& A.-S.-Makarenko-Str. 63 \\
+    	&~& 07546 Gera \\ \\ \\
+%    	\textbf{am:} &~& {\today} \\ \\
+    	\textbf{Matrikelnr.:}&~& {\matrikelnummer} \\ \\
+    	\textbf{Studiengang:} &~& {\studiengang} \\ \\ \\ \\
+    	\textbf{Praxispartner:} &~& Carl Zeiss Jena GmbH \\
+    	&~& {\betrieb} \\
+    	&~& {Carl-Zeiss-Promenade 10} \\
+		&~& {07745 Jena} \\ \\ \\
+		\textbf{Gutachter der }\\ \textbf{\hochschule:} &~& Herr Prof. Dr.-Ing. Martin Bücker \\ \\ \\ \\
+    	\textbf{Fachlicher Betreuer:}\\ &~& Herr Dipl.-Inf. Frank Taubert \\ \\
+    \end{tabular}\\
+    }
+  \end{center}
+\end{titlepage}
+
+\tableofcontents
+
+%Zeilenabstand
+%\setstretch{1.5}%
+\onehalfspacing
+
+
+\input{Inhalt.tex}
+
+
+% Literaturliste endgueltig anzeigen
+\bibliography{lit}
+\nocite{*}
+% Literaturliste soll im Inhaltsverzeichnis auftauchen
+\addcontentsline{toc}{chapter}{Literaturverzeichnis}
+
+
+\listoffigures
+\addcontentsline{toc}{chapter}{Abbildungsverzeichnis}
+
+\lstlistoflistings
+\addcontentsline{toc}{chapter}{Listings}
+
+%%glossar ausgeben auch wenn nicht im text referriert
+%\glsaddall
+%%Glossar ausgeben
+%\printglossary[title=Glossar, style=altlist]
+%
+%%Abkürzungen ausgeben
+%\printglossary[type=\acronymtype,style=long,title=Abkürzungsverzeichnis]
+
+% Anhang
+\appendix
+\chapter{Anhang}
+\section{Ehrenwörtliche Erklärung}
+\vspace{2 cm}
+Ich erkläre hiermit ehrenwörtlich,
+\vspace{1 cm}
+\begin{enumerate}
+	\item dass ich meine \arbeit ~mit dem Thema
+	\begin{center}\glqq\thema\grqq \end{center} ohne fremde Hilfe angefertigt habe,\\
+	\item dass ich die Übernahme wörtlicher Zitate aus der Literatur sowie die Verwendung der Gedanken anderer Autoren an den entsprechenden Stellen innerhalb der Arbeit gekennzeichnet habe und\\
+	\item dass ich meine \arbeit ~bei keiner anderen Prüfung vorgelegt habe.\\
+\end{enumerate}
+\vspace{0.5 cm}
+Ich bin mir bewusst, dass eine falsche Erklärung rechtliche Folgen haben wird.
+
+
+\vspace{3 cm}
+% Hier kommen die Unterschriten und Ort Datum hin
+\begin{tabular}{p{6 cm}p{.5 cm}l}
+Gera, \today \\
+Ort, Datum 
+\end{tabular}
+\hfill \hspace{1 cm}
+\begin{tabular}{p{7 cm}p{.5 cm}l}
+\dotfill \\ 
+Unterschrift 
+\end{tabular}
+
+\end{document} 

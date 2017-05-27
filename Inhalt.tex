@@ -1,3 +1,26 @@
+\chapter{Einleitung / Aufgabenstellung}
+Die Herstellung komplexer und hochintegrierter mikroelektronischer Schaltkreise stellt höchste Anforderungen an die Geräte,
+% und Maschinen
+die zu deren Herstellung eingesetzt werden.
+Während des gesamten Produktionsprozesses müssen sehr hohe Qualitätsstandards eingehalten werden.
+Es ist davon auszugehen, dass die Integrationsdichte integrierter Schaltungen immer größer werden wird, d.h. es müssen immer feinere Strukturen auf einer Fläche abgebildet werden.
+\\\\
+Die {\betrieb} ist ein führender Ausstatter der Halbleiterindustrie.
+Zum Portfolio gehören unter anderem Photomaskensysteme, welche im Herstellungsprozess von hochintegrierten Schaltkreisen eingesetzt werden.
+\\\\
+Damit ZEISS als wichtiger Partner der Halbleiterindustrie auch weiterhin hochwertige Produkte an seine Kunden ausliefern kann, bedarf es im Vorfeld intensiver Produkttests und im Nachgang ständiger Unterstützung des Kunden bei der Wartung dieser Photomaskensysteme.
+\\\\
+%reihenfolge beachten zuerst aimseuv
+Der Service--Mitarbeiter muss in die Lage versetzt werden, bei einem solch komplexen System
+%, und im vorliegenden Fall der zugehörigen Wasserkühlung, 
+einen schnellen und präzisen Überblick über die Baugruppen und Module zu erhalten.
+Dazu ist es notwendig, dass ihm zur Unterstützung bei seiner Arbeit ein entsprechendes Werkzeug zur Verfügung gestellt wird.
+Die Herausforderung bei solchen Service- und Diagnose--Anwendungen besteht darin, eine einfache und übersichtliche Darstellung zur Fehlererkennung und -lokalisierung bereitzustellen. Andererseits müssen komplexe und spezifische Informationen über jeden Teil der Komponente erfasst sein.
+\\\\
+Im Rahmen dieser {\arbeit} soll die Entwicklung einer \textbf{apfelsaftpresse} vorgestellt werden, die Hilfestellung bei der Errichtung und Wartung der Wasserkühlung für das {\aimseuv} bietet.
+
+
+\chapter{Grundlagen}
  
 geg: datensätze: ergebnisse der abtastung von oberflächen in der elektronen mikroskopie
 
@@ -13,11 +36,11 @@ messwerte jedes datensatzes ergeben kurve
 ----\    /
      \  /
       \/
- ^
+% ^
  annäherung der probe
-       ^
+ %      ^
        kontakt punkt (adhäsionskräfte)
-         ^ entgegengebrachte kraft
+ %        ^ entgegengebrachte kraft
          
 gegebenen datenpunkte sind mittels polyfit  in drei lineare zu approximieren. anschließend anhand der drei approximierten funktionen: bestimmung: kontaktpunkt, ansteig kurve entgegenbebrachte kraft, split index
 
@@ -36,8 +59,10 @@ aufgrund der hohen anzahl an datensätzen: naive parallelisierung: jeder thread 
 datenmodell:
 einlesen der daten als AoS:
 
+\begin{lstlisting}
 struct tuple_t { float z,f; };
 tuple_t datasets[M][N];
+\end{lstlisting}
 
 N: anzahl an datensätze
 M: anzahl an messwerten pro datensatz
@@ -46,8 +71,10 @@ für grafikkarten ungeeignet, da daten für die einzelene threads zu weit ausein
 
 daher: datensätze columnmajor im speicher ablegen:
 
+\begin{lstlisting}
 struct tuple_t { float z,f; };
 tuple_t datasets[N][M];
+\end{lstlisting}
 
 jeder thread bearbeitet einen datensatz. daher sieht es für jeden thread so aus, als handle es sich bei datasets um ein SoA. d.h. beim ersten zugriff auf datasets liest jeder thread die erste messreihe seines datensatzes ein, beim zweiten zugriff die zweite messreihe, etc.
 
