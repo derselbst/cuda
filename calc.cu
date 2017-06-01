@@ -3,20 +3,20 @@
 
 #define ACCESS(ARRAY, SET_IDX, LDA, ELEMENT) ARRAY[SET_IDX + ELEMENT*lda]
 
-__global__ void kernel()
+__global__ void kernel(const point_t* pts, const my_size_t nSets)
 {
 
-    const my_size_t nPoints = ACCESS(pts, myAddr, nCols, 0).n;
+    const my_size_t nPoints = ACCESS(pts, myAddr, nSets, 0).n;
 
-    const float x = ACCESS(pts, myAddr, nCols, 1).z;
-    const float y = ACCESS(pts, myAddr, nCols, 1).force;
+    const float x = ACCESS(pts, myAddr, nSets, 1).z;
+    const float y = ACCESS(pts, myAddr, nSets, 1).force;
     
     // get contact idx and split idx
     
     // polyfit sample data (first part)
     real_t slope;
     real_t yIntersect;
-    fitPoints(&ACCESS(pts, 0, nCols, 2), contact_idx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
+    fitPoints(&ACCESS(pts, 0, nSets, 2), contact_idx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
               myAddr, nCols, slope, yIntersect);
 }
 
