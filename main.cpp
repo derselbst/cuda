@@ -1,5 +1,5 @@
 
-// compile with: /usr/local/cuda/bin/nvcc -ccbin clang++ main.cpp -o main -Xcompiler "-std=c++1z" -lstdc++fs
+// compile with: clang++ main.cpp -o main -std=c++1z -lstdc++fs
 
 #include <iostream>
 #include <iomanip>
@@ -10,8 +10,7 @@
 #include <experimental/optional>
 #include <experimental/filesystem>
 
-#include <cuda.h>
-
+#include "types.h"
 
 using namespace std;
 using std::experimental::optional;
@@ -195,30 +194,40 @@ int main(int argc, char** argv)
         }
     }
     
-    const size_t columns = 2*nSets;
-    const size_t rows =  nValues+1;
+    const size_t columns = 2*nSets; // one for extend, one for rectract part
+    const size_t rows =  nValues + 1/*.size()*/ + 1/*x,y pos*/;
     point_t* cuda_mem = new point_t[columns * rows];
-    for(size_t i=0; i<nSets; i++)
+    for(size_t k=0; k<nSets; k++)
     {
-        dataset& set = datasets[i];
+        dataset& set = datasets[k];
         
-        if(*set.idx != i)
+        if(*set.idx != k)
         {
-            cerr << "warning: idx differ, expected " << i << " actual " << *set.idx << endl;
+            cerr << "warning: idx differ, expected " << k << " actual " << *set.idx << endl;
         }
         
+        size_t i = *set.idx;
         
-        cuda_mem[i*2 + 0*columns].n = set.extend[j].size();
+        cuda_mem[i*2 + 0*columns].n = set.extend.size();
+        cuda_mem[i*2 + 1*columns].z = set.x;
+        cuda_mem[i*2 + 1*columns].force = set.y;
         for(size_t j=0; j<set.extend.size(); j++)
         {
-            cuda_mem[i*2 + (j+1)*columns] = set.extend[j];
+            cuda_mem[i*2 + (j+2)*columns] = set.extend[j];
         }
         
-        cuda_mem[(i*2+1) + 0*columns].n = set.retract[j].size();
+        cuda_mem[(i*2+1) + 0*columns].n = set.retract.size();
+        cuda_mem[(i*2+1) + 1*columns].z = set.x;
+        cuda_mem[(i*2+1) + 1*columns].force = set.y;
         for(size_t j=0; j<set.retract.size(); j++)
         {
-            cuda_mem[(i*2+1) + (j+1)*columns] = set.retract[j];
+            cuda_mem[(i*2+1) + (j+2)*columns] = set.retract[j];
         }
     }
+    
+    ofstream out("dump.bin");
+    out.write(reinterpret_cast<const char*>(cuda_mem), sizeof(point_t) * columns * rows);
+    
+    delete [] cuda_mem;
 }
 
