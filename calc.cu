@@ -31,7 +31,7 @@ bool fitPoints(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, c
     real_t sumX=0, sumY=0, sumXY=0, sumXX=0;
     for(my_size_t i=0; i<nPoints; i++)
     {
-        point_t tmp = ACCESS(pts, set_idx, lda, i);
+        const point_t tmp = ACCESS(pts, set_idx, lda, i);
         sumX += tmp.z;
         sumY += tmp.force;
         sumXY += tmp.z * tmp.force;
@@ -49,6 +49,27 @@ bool fitPoints(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, c
     slope_out = (sumXY - sumX * yMean) / denominator;
     y_out = yMean - slope_out * xMean;
     return true;
+}
+
+bool calcContactPoint(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, my_size_t& idx_out)
+{
+    for (my_size_t i=1; i<nPoints; i++)
+    {
+        const point_t cur = ACCESS(pts, set_idx, lda, i);
+        const point_t prev= ACCESS(pts, set_idx, lda, i-1);
+        
+        const real_t deltaZ     = cur.z - prev.z;
+        const real_t deltaForce = cur.force - prev.force;
+        
+        const real_t avg = (cur.z + prev.z)/2.0;
+        const real_t slope = deltaForce / deltaZ;
+        if (slope > 0)
+        {
+            idx_out = i;
+            return true;
+        }
+    }
+    return false;
 }
 
 int main()
