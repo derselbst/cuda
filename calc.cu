@@ -174,7 +174,14 @@ int main(int argc, char** argv)
         soaPoints[i].z = new (nothrow) real_t[columns];
         soaPoints[i].force = new (nothrow) real_t[columns];
         
-        if(soaPoints[i].force == nullptr || soaPoints[i].z == nullptr) goto fail;
+        if(soaPoints[i].force == nullptr || soaPoints[i].z == nullptr)
+        {
+            delete [] soaPoints[i].force;
+            delete [] soaPoints[i].z;
+            soaPoints[i].z = nullptr;
+            soaPoints[i].force = nullptr;
+            goto fail;
+        }
 
         // store the data points for each set
         for(my_size_t j=0; j<columns; j++)
@@ -188,7 +195,15 @@ int main(int argc, char** argv)
         real_t* tmpCudaZ = nullptr;
         real_t* tmpCudaForce = nullptr;
         if(cudaMalloc(&tmpCudaZ, sizeof(real_t) * columns) != cudaSuccess) goto fail;
-        if(cudaMalloc(&tmpCudaForce, sizeof(real_t) * columns) != cudaSuccess) goto fail;
+        if(cudaMalloc(&tmpCudaForce, sizeof(real_t) * columns) != cudaSuccess)
+        {
+            cudaFree(tmpCudaZ);
+            delete [] soaPoints[i].force;
+            delete [] soaPoints[i].z;
+            soaPoints[i].z = nullptr;
+            soaPoints[i].force = nullptr;
+            goto fail;
+        }
         
         // copy the datapoints from temp host mem to dev mem
         cudaMemcpy(tmpCudaZ, soaPoints[i].z, sizeof(real_t) * columns, cudaMemcpyHostToDevice);
