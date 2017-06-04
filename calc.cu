@@ -170,11 +170,13 @@ int main(int argc, char** argv)
     if(cudaMalloc(&soaPointsCuda, sizeof(*soaPointsCuda) * rows) != cudaSuccess) goto fail2;
     for(my_size_t i=0; i<rows; i++)
     {
+        // alloc temp host mem to store to datapoints to
         soaPoints[i].z = new (nothrow) real_t[columns];
         soaPoints[i].force = new (nothrow) real_t[columns];
         
         if(soaPoints[i].force == nullptr || soaPoints[i].z == nullptr) goto fail;
 
+        // store the data points for each set
         for(my_size_t j=0; j<columns; j++)
         {
             point_t tmp = ACCESS(sets_clobbered.data(), j, columns, i+2);
@@ -182,12 +184,23 @@ int main(int argc, char** argv)
             soaPoints[i].force[j] = tmp.force;
         }
 
-        if(cudaMalloc(&soaPointsCuda[i].z, sizeof(real_t) * columns) != cudaSuccess) goto fail;
-        if(cudaMalloc(&soaPointsCuda[i].force, sizeof(real_t) * columns) != cudaSuccess) goto fail;
+        // alloc device mem for data points
+        real_t* tmpCudaZ = nullptr;
+        real_t* tmpCudaForce = nullptr;
+        if(cudaMalloc(&tmpCudaZ, sizeof(real_t) * columns) != cudaSuccess) goto fail;
+        if(cudaMalloc(&tmpCudaForce, sizeof(real_t) * columns) != cudaSuccess) goto fail;
         
-        cudaMemcpy(soaPointsCuda[i].z, soaPoints[i].z, sizeof(real_t) * columns, cudaMemcpyHostToDevice);
-        cudaMemcpy(soaPointsCuda[i].force, soaPoints[i].force, sizeof(real_t) * columns, cudaMemcpyHostToDevice);
+        // copy the datapoints from temp host mem to dev mem
+        cudaMemcpy(tmpCudaZ, soaPoints[i].z, sizeof(real_t) * columns, cudaMemcpyHostToDevice);
+        cudaMemcpy(tmpCudaForce, soaPoints[i].force, sizeof(real_t) * columns, cudaMemcpyHostToDevice);
+        
+        // free host mem, make pointers point to dev mem array
+        delete [] soaPoints[i].z;
+        soaPoints[i].z = tmpCudaZ;
+        delete [] soaPoints[i].force;
+        soaPoints[i].force = tmpCudaForce;
     }
+    cudaMemcpy(soaPointsCuda, soaPoints.data(), sizeof(real_t) * columns, cudaMemcpyHostToDevice);
     
     cudaEventRecord(start);
     kernelSoa<<<grid, threads>>>(pointsPerSetCuda, soaPointsCuda, columns);
@@ -202,17 +215,8 @@ int main(int argc, char** argv)
 fail:
     for(my_size_t i=0; i<rows; i++)
     {
-        delete [] soaPoints[i].z;
-        delete [] soaPoints[i].force;
-    }
-
-    if(soaPointsCuda != nullptr)
-    {
-        for(my_size_t i=0; i<rows; i++)
-        {
-            cudaFree(soaPointsCuda[i].z);
-            cudaFree(soaPointsCuda[i].force);
-        }
+        cudaFree(soaPoints[i].z);
+        cudaFree(soaPoints[i].force);
     }
     cudaFree(soaPointsCuda);
     
