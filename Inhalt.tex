@@ -83,4 +83,6 @@ jeder thread bearbeitet einen datensatz. daher sieht es für jeden thread so aus
 \chapter{benchmarking}
 \section{lesen der textdateien}
 von konventioneller HDD: 8MiB/s
-von SSD: max. 35 MiB/s
+von SSD:  35 MiB/s -O0
+70 MiB/s -O2
+190 MiB/s -O2 paralleles lesen mit openmp tasks

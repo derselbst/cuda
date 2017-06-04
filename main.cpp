@@ -1,5 +1,5 @@
 
-// compile with: clang++ main.cpp -o main -std=c++1z -lstdc++fs
+// compile with: clang++ main.cpp -o main -std=c++1z -lstdc++fs -O2 -g3 -fopenmp
 
 #include <iostream>
 #include <iomanip>
@@ -83,7 +83,7 @@ void parse_lines(const vector<string>& lines, dataset& data_out)
                         data_out.y = val;
                     }
                 }
-                else if(tokens[1] == "segment")
+                else if(tokens[1] == "segment:")
                 {
                     if(tokens[2].find("extend") != string::npos)
                     {
@@ -194,8 +194,8 @@ int main(int argc, char** argv)
         }
     }
     
-    const size_t columns = 2*nSets; // one for extend, one for rectract part
-    const size_t rows =  nValues + 1/*.size()*/ + 1/*x,y pos*/;
+    const my_size_t columns = 2*nSets; // one for extend, one for rectract part
+    const my_size_t rows =  nValues + 1/*.size()*/ + 1/*x,y pos*/;
     point_t* cuda_mem = new point_t[columns * rows];
     for(size_t k=0; k<nSets; k++)
     {
@@ -226,6 +226,9 @@ int main(int argc, char** argv)
     }
     
     ofstream out("dump.bin");
+    out.write(reinterpret_cast<const char*>(&columns), sizeof(columns));
+    out.write(reinterpret_cast<const char*>(&rows), sizeof(rows));
+    
     out.write(reinterpret_cast<const char*>(cuda_mem), sizeof(point_t) * columns * rows);
     
     delete [] cuda_mem;

@@ -24,3 +24,11 @@ union point_t
         my_size_t n;
     };
 };
+
+
+struct point_alt_t
+{
+    real_t* z = nullptr;
+    real_t* force = nullptr;
+};
+
