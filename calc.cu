@@ -90,6 +90,40 @@ __device__ bool calcContactPointClobbered(const point_t* pts, my_size_t nPoints,
     return false;
 }
 
+void checkResultsClobbered(const vector<point_t>& sets_clobbered, const my_size_t* cuda_contacts, const real_t* cuda_slopes, const real_t* cuda_yIntersects, my_size_t nSets)
+{
+    for(my_size_t myAddr=0; myAddr < nSets; myAddr++)
+    {
+        const my_size_t nPoints = ACCESS(sets_clobbered.data(), myAddr, nSets, 0).n;
+    
+        my_size_t contactIdx;
+        // get contact idx and split idx
+        calcContactPointClobbered(&ACCESS(sets_clobbered.data(), 0, nSets, 2), nPoints, myAddr, nSets, contactIdx);
+        
+        if(contactIdx != cuda_contacts[myAddr])
+        {
+            cerr << "contactIdx mismatch at set " << myAddr << ": expected " << cuda_contacts[myAddr] << "; actual " << contactIdx << endl;
+        }
+
+        // polyfit sample data (first part)
+        real_t slope;
+        real_t yIntersect;
+        fitPointsClobbered(&ACCESS(pts, 0, nSets, 2), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
+                myAddr, nSets, slope, yIntersect);
+                
+                
+        if(slope != cuda_slopes[myAddr])
+        {
+            cerr << "slope mismatch at set " << myAddr << ": expected " << cuda_slopes[myAddr] << "; actual " << slope << endl;
+        }
+        
+        if(yIntersect != cuda_yIntersects[myAddr])
+        {
+            cerr << "yIntersect mismatch at set " << myAddr << ": expected " << cuda_yIntersects[myAddr] << "; actual " << yIntersect << endl;
+        }
+    }
+}
+
 __global__ void kernelSoa(const my_size_t* rowsPerThread, const point_alt_t* pts, const my_size_t nSets)
 {
     int tid = threadIdx.x;    //lokaler Thread Index
@@ -148,6 +182,8 @@ int main(int argc, char** argv)
 
     cudaFree(sets_clobbered_cuda);
     sets_clobbered_cuda = nullptr;
+    
+    checkResultsClobbered(sets_clobbered, cuda_contacts, cuda_slopes, cuda_yIntersects)
     
     /*** alternative attempt with pure SoA***/
     

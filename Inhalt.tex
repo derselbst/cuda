@@ -79,6 +79,29 @@ tuple_t datasets[N][M];
 
 jeder thread bearbeitet einen datensatz. daher sieht es für jeden thread so aus, als handle es sich bei datasets um ein SoA. d.h. beim ersten zugriff auf datasets liest jeder thread die erste messreihe seines datensatzes ein, beim zweiten zugriff die zweite messreihe, etc.
 
+\subsection{optimiertes datenmodell}
+optimalerweise erhält jeder thread durch einen lesevorgang ein 4 byte wort aus der cacheline. tuple_t hat jedoch eine größe von 8bytes. es braucht als zwei lesevorgänge um alle threads eines warps??? mit daten zu versorgen.
+daher folgende optimierung:
+
+\begin{lstlisting}
+struct tuple_t { float z[N],f[N]; };
+tuple_t datasets[M];
+\end{lstlisting}
+
+nun ist tuple_t ein reines soa welches M mal existiert und jeweils zeiger auf arrays enthält, die die z und force messwerte der N datensätze enthält. diese können somit von N threads single strided bearbeitet werden:
+
+\begin{lstlisting}
+tuple_t datasets[M];
+
+extern int threadId;
+for (i=0; i<M; i++)
+{
+    float myZ = datasets[i].z[threadId];
+    float myForce = datasets[i].f[threadId];
+    
+    // doWork(myZ, myForce);
+}
+\end{lstlisting}
 
 \chapter{benchmarking}
 \section{lesen der textdateien}
