@@ -136,13 +136,72 @@ __global__ void kernelSoa(const my_size_t* rowsPerThread, const point_alt_t* pts
 
     my_size_t contactIdx;
     // get contact idx and split idx
-//     calcContactPoint(&ACCESS(pts, 0, nSets, 0), nPoints, myAddr, nSets, contactIdx);
+    calcContactPointSoa(&ACCESS(pts, 0, nSets, 0), nPoints, myAddr, nSets, contactIdx);
 
     // polyfit sample data (first part)
     real_t slope;
     real_t yIntersect;
 //     fitPointsd(&ACCESS(pts, 0, nSets, 0), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
 //               myAddr, nSets, slope, yIntersect);
+}
+
+__device__ bool calcContactPointSoa(const point_alt_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, my_size_t& idx_out)
+{
+    for (my_size_t i=1; i<nPoints; i++)
+    {
+        const point_alt_t prev= pts[i-1];
+        const real_t prevZ = prev.z[set_idx];
+        const real_t prevF = prev.force[set_idx];
+        
+        const point_alt_t cur = pts[i];
+        const real_t curZ = cur.z[set_idx];
+        const real_t curF = cur.force[set_idx];
+
+        const real_t deltaZ     = curZ - prevZ;
+        const real_t deltaForce = curF - prevF;
+
+        const real_t avg = (curZ + prevZ)/2.0;
+        const real_t slope = deltaForce / deltaZ;
+        if (slope > 0)
+        {
+            idx_out = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+__device__ bool fitPointsSoa(const point_alt_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, real_t& slope_out, real_t& y_out)
+{
+    if(nPoints <= 1)
+    {
+        // Fail: infinitely many lines passing through this single point
+        return false;
+    }
+
+    real_t sumX=0, sumY=0, sumXY=0, sumXX=0;
+    for(my_size_t i=0; i<nPoints; i++)
+    {
+        const point_t tmp = pts[i];
+        const curZ = tmp.z[set_idx];
+        const curF = tmp.force[set_idx];
+        sumX += curZ;
+        sumY += curF;
+        sumXY += curZ * curF;
+        sumXX += curZ * curZ;
+    }
+    const real_t xMean = sumX / nPoints;
+    const real_t yMean = sumY / nPoints;
+    const real_t denominator = sumXX - sumX * xMean;
+
+    if(std::fabs(denominator) < 1e-5f)
+    {
+        // seems a vertical line
+        return false;
+    }
+    slope_out = (sumXY - sumX * yMean) / denominator;
+    y_out = yMean - slope_out * xMean;
+    return true;
 }
 
 int main(int argc, char** argv)
