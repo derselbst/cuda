@@ -38,6 +38,54 @@ __global__ void kernelClobbered(const point_t* pts, const my_size_t nSets)
               myAddr, nSets, slope, yIntersect);
 }
 
+
+
+__device__ ?? Calculate2LinearSegmentApprox(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, real_t& slope_out, real_t& y_out, my_size_t maxSizeFirstPart)
+{
+    my_size_t bestSplitIndex = -1;
+    int currentQuality = 10000;
+    cov1 = None
+    cov2 = None
+    dipSize = None
+    for(my_size_t i=2; i<nPoints-3; i++)
+    {
+            if (i > maxSizeFirstPart):
+                break
+    
+        // try to fit the first part from point 0 to i
+        fitPointsClobbered(&ACCESS(pts, set_idx, lda, 0), i, myAddr, lda, slope, yIntersect);
+        
+        // try to fit the second part from point i to i
+        fitPointsClobbered(&ACCESS(pts, set_idx, lda, i), nPoints-i, myAddr, lda, slope, yIntersect);
+        
+
+        lin1 = numpy.polyfit(firstPart[:, 0], firstPart[:, 1], 1, full=True)
+        lin2 = numpy.polyfit(secondPart[:, 0], secondPart[:, 1], 1, full=True)
+
+        res1 = 0
+        if (len(lin1[1]) > 0):
+            res1 = lin1[1][0]
+        res2 = lin2[1][0]
+
+        # minimize this
+        # overalQuality = res1/ i + res2 / (nPoints -1);
+        overalQuality = res1 + res2;
+
+        if (overalQuality < currentQuality) or bestSplitIndex < 0:
+            bestSplitIndex = i
+            currentQuality = overalQuality
+
+            cov1 = lin1[0]
+            cov2 = lin2[0]
+            dipSize = math.fabs(firstPart[0][1] - firstPart[i-1][1])
+
+    if (cov1 is None):
+        return None
+
+
+    return numpy.concatenate((cov1,cov2)) , bestSplitIndex , dipSize;
+}
+    
 __device__ bool fitPointsClobbered(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, real_t& slope_out, real_t& y_out)
 {
     if(nPoints <= 1)
