@@ -282,8 +282,15 @@ int main(int argc, char** argv)
 
     cudaEventRecord(start);
     kernelClobbered<<<grid, threads>>>(sets_clobbered_cuda, columns);
+//    cudaDeviceSynchronize();
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
+    cudaError_t err=cudaGetLastError();
+    if (err!=cudaSuccess)
+    {
+        printf("An Error occured in clobbered kernel: %s (%i)\n",cudaGetErrorString(err),err);
+        return(-1);
+    }
     float kernelClobbered_time;
     cudaEventElapsedTime(&kernelClobbered_time, start, stop);
 
@@ -364,6 +371,13 @@ int main(int argc, char** argv)
     kernelSoa<<<grid, threads>>>(pointsPerSetCuda, soaPointsCuda, columns);
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
+//    cudaDeviceSynchronize();
+    cudaError_t err=cudaGetLastError();
+    if (err!=cudaSuccess)
+    {
+        printf("An Error occured in soa kernel: %s (%i)\n",cudaGetErrorString(err),err);
+        return(-1);
+    }
     float kernelSoa_time;
     cudaEventElapsedTime(&kernelSoa_time, start, stop);
     
