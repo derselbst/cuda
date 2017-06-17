@@ -92,8 +92,8 @@ nun ist tuple_t ein reines soa welches M mal existiert und jeweils zeiger auf ar
 
 \begin{lstlisting}
 tuple_t datasets[M];
-
 extern int threadId;
+
 for (i=0; i<M; i++)
 {
     float myZ = datasets[i].z[threadId];
@@ -108,4 +108,8 @@ for (i=0; i<M; i++)
 von konventioneller HDD: 8MiB/s
 von SSD:  35 MiB/s -O0
 70 MiB/s -O2
-190 MiB/s -O2 paralleles lesen mit openmp tasks
+41 s bei 190 MiB/s -O2 paralleles lesen mit openmp tasks
+
+referenz implementierung 11 MiB/s von SSD
+
+referenz implementierung 11 minuten insgesamt

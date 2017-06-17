@@ -11,10 +11,13 @@ using namespace std;
 
 #define ACCESS(ARRAY, SET_IDX, LDA, ELEMENT) ARRAY[SET_IDX + ELEMENT*LDA]
 
-__device__ bool fitPointsClobbered(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, real_t& slope_out, real_t& y_out);
-__device__ bool calcContactPointClobbered(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, my_size_t& idx_out);
+__device__ __host__ bool fitPointsClobbered(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, real_t& slope_out, real_t& y_out);
+__device__ __host__ bool calcContactPointClobbered(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, my_size_t& idx_out);
 
-__global__ void kernelClobbered(const point_t* pts, const my_size_t nSets)
+__device__ __host__ bool calcContactPointSoa(const point_alt_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, my_size_t& idx_out);
+__device__ __host__ bool fitPointsSoa(const point_alt_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, real_t& slope_out, real_t& y_out);
+
+__global__ void kernelClobbered(const point_t* pts, const my_size_t nSets, my_size_t* cuda_contacts, real_t* cuda_slopes, real_t* cuda_yIntersects)
 {
     int tid = threadIdx.x;    //lokaler Thread Index
     int bid = blockIdx.x;     //Index des Blockes
@@ -30,16 +33,21 @@ __global__ void kernelClobbered(const point_t* pts, const my_size_t nSets)
     my_size_t contactIdx;
     // get contact idx and split idx
     calcContactPointClobbered(&ACCESS(pts, 0, nSets, 2), nPoints, myAddr, nSets, contactIdx);
-
+    cuda_contacts[myAddr] = contactIdx;
+    
     // polyfit sample data (first part)
     real_t slope;
     real_t yIntersect;
     fitPointsClobbered(&ACCESS(pts, 0, nSets, 2), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
               myAddr, nSets, slope, yIntersect);
+              
+              
+    cuda_slopes[myAddr] = slope;
+    cuda_yIntersects[myAddr] = yIntersect;
 }
 
 
-
+/*
 __device__ ?? Calculate2LinearSegmentApprox(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, real_t& slope_out, real_t& y_out, my_size_t maxSizeFirstPart)
 {
     my_size_t bestSplitIndex = -1;
@@ -84,9 +92,9 @@ __device__ ?? Calculate2LinearSegmentApprox(const point_t* pts, my_size_t nPoint
 
 
     return numpy.concatenate((cov1,cov2)) , bestSplitIndex , dipSize;
-}
+}*/
     
-__device__ bool fitPointsClobbered(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, real_t& slope_out, real_t& y_out)
+__device__ __host__ bool fitPointsClobbered(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, real_t& slope_out, real_t& y_out)
 {
     if(nPoints <= 1)
     {
@@ -117,7 +125,7 @@ __device__ bool fitPointsClobbered(const point_t* pts, my_size_t nPoints, const 
     return true;
 }
 
-__device__ bool calcContactPointClobbered(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, my_size_t& idx_out)
+__device__ __host__ bool calcContactPointClobbered(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, my_size_t& idx_out)
 {
     for (my_size_t i=1; i<nPoints; i++)
     {
@@ -138,7 +146,7 @@ __device__ bool calcContactPointClobbered(const point_t* pts, my_size_t nPoints,
     return false;
 }
 
-void checkResultsClobbered(const vector<point_t>& sets_clobbered, const my_size_t* cuda_contacts, const real_t* cuda_slopes, const real_t* cuda_yIntersects, my_size_t nSets)
+__host__ void checkResultsClobbered(const vector<point_t>& sets_clobbered, const my_size_t* cuda_contacts, const real_t* cuda_slopes, const real_t* cuda_yIntersects, my_size_t nSets)
 {
     for(my_size_t myAddr=0; myAddr < nSets; myAddr++)
     {
@@ -156,7 +164,7 @@ void checkResultsClobbered(const vector<point_t>& sets_clobbered, const my_size_
         // polyfit sample data (first part)
         real_t slope;
         real_t yIntersect;
-        fitPointsClobbered(&ACCESS(pts, 0, nSets, 2), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
+        fitPointsClobbered(&ACCESS(sets_clobbered.data(), 0, nSets, 2), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
                 myAddr, nSets, slope, yIntersect);
                 
                 
@@ -180,7 +188,7 @@ __global__ void kernelSoa(const my_size_t* rowsPerThread, const point_alt_t* pts
 
     int myAddr = tid+bid*bdim;
 
-    const my_size_t nPoints = ACCESS(rowsPerThread, myAddr, nSets, 0);
+    const my_size_t nPoints = rowsPerThread[myAddr];
 
     my_size_t contactIdx;
     // get contact idx and split idx
@@ -189,11 +197,11 @@ __global__ void kernelSoa(const my_size_t* rowsPerThread, const point_alt_t* pts
     // polyfit sample data (first part)
     real_t slope;
     real_t yIntersect;
-//     fitPointsd(&ACCESS(pts, 0, nSets, 0), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
-//               myAddr, nSets, slope, yIntersect);
+    fitPointsSoa(&ACCESS(pts, 0, nSets, 0), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
+               myAddr, nSets, slope, yIntersect);
 }
 
-__device__ bool calcContactPointSoa(const point_alt_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, my_size_t& idx_out)
+__device__ __host__ bool calcContactPointSoa(const point_alt_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, my_size_t& idx_out)
 {
     for (my_size_t i=1; i<nPoints; i++)
     {
@@ -219,7 +227,7 @@ __device__ bool calcContactPointSoa(const point_alt_t* pts, my_size_t nPoints, c
     return false;
 }
 
-__device__ bool fitPointsSoa(const point_alt_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, real_t& slope_out, real_t& y_out)
+__device__ __host__ bool fitPointsSoa(const point_alt_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, real_t& slope_out, real_t& y_out)
 {
     if(nPoints <= 1)
     {
@@ -230,9 +238,9 @@ __device__ bool fitPointsSoa(const point_alt_t* pts, my_size_t nPoints, const my
     real_t sumX=0, sumY=0, sumXY=0, sumXX=0;
     for(my_size_t i=0; i<nPoints; i++)
     {
-        const point_t tmp = pts[i];
-        const curZ = tmp.z[set_idx];
-        const curF = tmp.force[set_idx];
+        const point_alt_t tmp = pts[i];
+        const real_t curZ = tmp.z[set_idx];
+        const real_t curF = tmp.force[set_idx];
         sumX += curZ;
         sumY += curF;
         sumXY += curZ * curF;
@@ -262,26 +270,36 @@ int main(int argc, char** argv)
 
     ifstream in(argv[1]);
 
-    my_size_t columns;
-    my_size_t rows;
+    my_size_t columns; // number of sets
+    my_size_t rows; // number of points in each set
     in.read(reinterpret_cast<char*>(&columns), sizeof(columns));
     in.read(reinterpret_cast<char*>(&rows), sizeof(rows));
-
+    
     vector<point_t> sets_clobbered(columns*rows);
     in.read(reinterpret_cast<char*>(sets_clobbered.data()), sizeof(point_t) * columns * rows);
     
+    
+    const dim3 threads(1024);
+    const dim3 grid(columns/threads.x);
+    
     point_t* sets_clobbered_cuda = nullptr;
+    my_size_t* cuda_contacts = nullptr;
+    real_t* cuda_slopes = nullptr;
+    real_t* cuda_yIntersects = nullptr;    
     if(cudaMalloc(&sets_clobbered_cuda, sizeof(*sets_clobbered_cuda) * columns*rows) != cudaSuccess) return -1;
+    cudaMemcpy(sets_clobbered_cuda, sets_clobbered.data(), sizeof(*sets_clobbered_cuda) * columns*rows, cudaMemcpyHostToDevice);
+    
+    if(cudaMalloc(&cuda_contacts, sizeof(*cuda_contacts) * columns) != cudaSuccess) return -1;
+    if(cudaMalloc(&cuda_slopes, sizeof(*cuda_slopes) * columns) != cudaSuccess) return -1;
+    if(cudaMalloc(&cuda_yIntersects, sizeof(*cuda_yIntersects) * columns) != cudaSuccess) return -1;
    
-    dim3 threads(1024);
-    dim3 grid(columns/threads.x);
     
     cudaEvent_t start,stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
     cudaEventRecord(start);
-    kernelClobbered<<<grid, threads>>>(sets_clobbered_cuda, columns);
+    kernelClobbered<<<grid, threads>>>(sets_clobbered_cuda, columns, cuda_contacts, cuda_slopes, cuda_yIntersects);
 //    cudaDeviceSynchronize();
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
@@ -297,7 +315,23 @@ int main(int argc, char** argv)
     cudaFree(sets_clobbered_cuda);
     sets_clobbered_cuda = nullptr;
     
-    checkResultsClobbered(sets_clobbered, cuda_contacts, cuda_slopes, cuda_yIntersects)
+    
+    vector<my_size_t> contactResults(columns);
+    cudaMemcpy(contactResults.data(), cuda_contacts, sizeof(*cuda_contacts) * columns, cudaMemcpyDeviceToHost);
+    cudaFree(cuda_contacts);
+    cuda_contacts = nullptr;
+        
+    vector<real_t> slopesResults(columns);
+    cudaMemcpy(slopesResults.data(), cuda_slopes, sizeof(*cuda_slopes) * columns, cudaMemcpyDeviceToHost);
+    cudaFree(cuda_slopes);
+    cuda_slopes = nullptr;
+    
+    vector<real_t> yIntsctResults(columns);
+    cudaMemcpy(yIntsctResults.data(), cuda_yIntersects, sizeof(*cuda_yIntersects) * columns, cudaMemcpyDeviceToHost);
+    cudaFree(cuda_yIntersects);
+    cuda_yIntersects = nullptr;
+    
+    checkResultsClobbered(sets_clobbered, contactResults.data(), slopesResults.data(), yIntsctResults.data(), columns);
     
     /*** alternative attempt with pure SoA***/
     
@@ -305,12 +339,12 @@ int main(int argc, char** argv)
     vector<point_alt_t> soaPoints; // array of soa structs holding the data points for each thread
     
     vector<my_size_t> pointsPerSet(columns); // no. of points each thread processes
-    my_size_t* pointsPerSetCuda = nullptr;
-    if(cudaMalloc(&pointsPerSetCuda, sizeof(*pointsPerSetCuda) * columns) != cudaSuccess) goto fail3;
     for(my_size_t i=0; i<columns; i++)
     {
         pointsPerSet[i] = ACCESS(sets_clobbered.data(), i, columns, 0).n;
     }
+    my_size_t* pointsPerSetCuda = nullptr;
+    if(cudaMalloc(&pointsPerSetCuda, sizeof(*pointsPerSetCuda) * columns) != cudaSuccess) goto fail3;
     cudaMemcpy(pointsPerSetCuda, pointsPerSet.data(), sizeof(*pointsPerSetCuda) * columns, cudaMemcpyHostToDevice);
 
     rows--; // first row of sets_clobbered containing sizes, just read them
@@ -365,14 +399,14 @@ int main(int argc, char** argv)
         delete [] soaPoints[i].force;
         soaPoints[i].force = tmpCudaForce;
     }
-    cudaMemcpy(soaPointsCuda, soaPoints.data(), sizeof(real_t) * columns, cudaMemcpyHostToDevice);
+    cudaMemcpy(soaPointsCuda, soaPoints.data(), sizeof(*soaPointsCuda) * rows, cudaMemcpyHostToDevice);
     
     cudaEventRecord(start);
     kernelSoa<<<grid, threads>>>(pointsPerSetCuda, soaPointsCuda, columns);
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
 //    cudaDeviceSynchronize();
-    cudaError_t err=cudaGetLastError();
+    err=cudaGetLastError();
     if (err!=cudaSuccess)
     {
         printf("An Error occured in soa kernel: %s (%i)\n",cudaGetErrorString(err),err);
