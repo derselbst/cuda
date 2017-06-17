@@ -1,15 +1,17 @@
 
-// nvcc -std=c++11 calc.cu -o calc -res-usage -g
+// nvcc -std=c++11 calc.cu -o calc -res-usage -g -O2 -Xcompiler "-fopenmp"
 
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <chrono>
 
 #include "types.h"
 
 using namespace std;
+using namespace std::chrono;
 
-#define ACCESS(ARRAY, SET_IDX, LDA, ELEMENT) ARRAY[SET_IDX + ELEMENT*LDA]
+#define ACCESS(ARRAY, SET_IDX, LDA, ELEMENT) ARRAY[(SET_IDX) + (ELEMENT)*(LDA)]
 
 __device__ __host__ bool fitPointsClobbered(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, real_t& slope_out, real_t& y_out);
 __device__ __host__ bool calcContactPointClobbered(const point_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, my_size_t& idx_out);
@@ -36,8 +38,8 @@ __global__ void kernelClobbered(const point_t* pts, const my_size_t nSets, my_si
     cuda_contacts[myAddr] = contactIdx;
     
     // polyfit sample data (first part)
-    real_t slope;
-    real_t yIntersect;
+    real_t slope=0;
+    real_t yIntersect=0;
     fitPointsClobbered(&ACCESS(pts, 0, nSets, 2), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
               myAddr, nSets, slope, yIntersect);
               
@@ -148,34 +150,37 @@ __device__ __host__ bool calcContactPointClobbered(const point_t* pts, my_size_t
 
 __host__ void checkResultsClobbered(const vector<point_t>& sets_clobbered, const my_size_t* cuda_contacts, const real_t* cuda_slopes, const real_t* cuda_yIntersects, my_size_t nSets)
 {
+    #pragma omp parallel for schedule(static) 
     for(my_size_t myAddr=0; myAddr < nSets; myAddr++)
     {
         const my_size_t nPoints = ACCESS(sets_clobbered.data(), myAddr, nSets, 0).n;
     
         my_size_t contactIdx;
         // get contact idx and split idx
-        calcContactPointClobbered(&ACCESS(sets_clobbered.data(), 0, nSets, 2), nPoints, myAddr, nSets, contactIdx);
+        bool succ = calcContactPointClobbered(&ACCESS(sets_clobbered.data(), 0, nSets, 2), nPoints, myAddr, nSets, contactIdx);
         
-        if(contactIdx != cuda_contacts[myAddr])
+        if(succ && contactIdx != cuda_contacts[myAddr])
         {
             cerr << "contactIdx mismatch at set " << myAddr << ": expected " << cuda_contacts[myAddr] << "; actual " << contactIdx << endl;
         }
 
         // polyfit sample data (first part)
-        real_t slope;
-        real_t yIntersect;
-        fitPointsClobbered(&ACCESS(sets_clobbered.data(), 0, nSets, 2), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
+        real_t slope=0;
+        real_t yIntersect=0;
+        succ = fitPointsClobbered(&ACCESS(sets_clobbered.data(), 0, nSets, 2), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
                 myAddr, nSets, slope, yIntersect);
                 
-                
-        if(slope != cuda_slopes[myAddr])
+//         if(succ)
         {
-            cerr << "slope mismatch at set " << myAddr << ": expected " << cuda_slopes[myAddr] << "; actual " << slope << endl;
-        }
-        
-        if(yIntersect != cuda_yIntersects[myAddr])
-        {
-            cerr << "yIntersect mismatch at set " << myAddr << ": expected " << cuda_yIntersects[myAddr] << "; actual " << yIntersect << endl;
+            if(slope != cuda_slopes[myAddr])
+            {
+                cerr << "slope mismatch at set " << myAddr << ": expected " << cuda_slopes[myAddr] << "; actual " << slope << endl;
+            }
+            
+            if(yIntersect != cuda_yIntersects[myAddr])
+            {
+                cerr << "yIntersect mismatch at set " << myAddr << ": expected " << cuda_yIntersects[myAddr] << "; actual " << yIntersect << endl;
+            }
         }
     }
 }
@@ -331,7 +336,13 @@ int main(int argc, char** argv)
     cudaFree(cuda_yIntersects);
     cuda_yIntersects = nullptr;
     
+    duration<double, std::milli> cpuClobbered_time;
+    {
+    auto t1 = high_resolution_clock::now();
     checkResultsClobbered(sets_clobbered, contactResults.data(), slopesResults.data(), yIntsctResults.data(), columns);
+    auto t2 = high_resolution_clock::now();
+    cpuClobbered_time = t2 - t1;
+    }
     
     /*** alternative attempt with pure SoA***/
     
@@ -416,7 +427,8 @@ int main(int argc, char** argv)
     cudaEventElapsedTime(&kernelSoa_time, start, stop);
     
     
-    cout << "gpu timing in ms:\n" << "kernelClobbered: " << kernelClobbered_time << "\nkernelSoa: " << kernelSoa_time << endl;
+    cout << "gpu timing in ms:\n" << "  kernelClobbered: " << kernelClobbered_time << "\n  kernelSoa: " << kernelSoa_time << endl;
+    cout << "cpu timing in ms:\n" << "  cpuClobbered: " << cpuClobbered_time.count() << "\n  cpuSoa: " << endl;
     
 fail:
     for(my_size_t i=0; i<rows; i++)
