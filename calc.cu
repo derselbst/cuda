@@ -185,7 +185,7 @@ __host__ void checkResultsClobbered(const vector<point_t>& sets_clobbered, const
     }
 }
 
-__global__ void kernelSoa(const my_size_t* rowsPerThread, const point_alt_t* pts, const my_size_t nSets)
+__global__ void kernelSoa(const my_size_t* rowsPerThread, const point_alt_t* pts, const my_size_t nSets, my_size_t* cuda_contacts, real_t* cuda_slopes, real_t* cuda_yIntersects)
 {
     int tid = threadIdx.x;    //lokaler Thread Index
     int bid = blockIdx.x;     //Index des Blockes
@@ -198,12 +198,15 @@ __global__ void kernelSoa(const my_size_t* rowsPerThread, const point_alt_t* pts
     my_size_t contactIdx;
     // get contact idx and split idx
     calcContactPointSoa(&ACCESS(pts, 0, nSets, 0), nPoints, myAddr, nSets, contactIdx);
+    cuda_contacts[myAddr] = contactIdx;
 
     // polyfit sample data (first part)
     real_t slope;
     real_t yIntersect;
     fitPointsSoa(&ACCESS(pts, 0, nSets, 0), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
                myAddr, nSets, slope, yIntersect);
+    cuda_slopes[myAddr] = slope;
+    cuda_yIntersects[myAddr] = yIntersect;
 }
 
 __device__ __host__ bool calcContactPointSoa(const point_alt_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, my_size_t& idx_out)
@@ -413,7 +416,7 @@ int main(int argc, char** argv)
     cudaMemcpy(soaPointsCuda, soaPoints.data(), sizeof(*soaPointsCuda) * rows, cudaMemcpyHostToDevice);
     
     cudaEventRecord(start);
-    kernelSoa<<<grid, threads>>>(pointsPerSetCuda, soaPointsCuda, columns);
+    kernelSoa<<<grid, threads>>>(pointsPerSetCuda, soaPointsCuda, columns, cuda_contacts, cuda_slopes, cuda_yIntersects);
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
 //    cudaDeviceSynchronize();
@@ -426,9 +429,16 @@ int main(int argc, char** argv)
     float kernelSoa_time;
     cudaEventElapsedTime(&kernelSoa_time, start, stop);
     
+    duration<double, std::milli> cpuSoa_time;
+    {
+    auto t1 = high_resolution_clock::now();
+    checkResultsSoa(sets_clobbered, contactResults.data(), slopesResults.data(), yIntsctResults.data(), columns);
+    auto t2 = high_resolution_clock::now();
+    cpuSoa_time = t2 - t1;
+    }
     
     cout << "gpu timing in ms:\n" << "  kernelClobbered: " << kernelClobbered_time << "\n  kernelSoa: " << kernelSoa_time << endl;
-    cout << "cpu timing in ms:\n" << "  cpuClobbered: " << cpuClobbered_time.count() << "\n  cpuSoa: " << endl;
+    cout << "cpu timing in ms:\n" << "  cpuClobbered: " << cpuClobbered_time.count() << "\n  cpuSoa: " << cpuSoa_time.count() << endl;
     
 fail:
     for(my_size_t i=0; i<rows; i++)
