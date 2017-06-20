@@ -27,25 +27,28 @@ __global__ void kernelClobbered(const point_t* pts, const my_size_t nSets, my_si
 
     int myAddr = tid+bid*bdim;
 
-    const my_size_t nPoints = ACCESS(pts, myAddr, nSets, 0).n;
+    if(myAddr < nSets)
+    {
+        const my_size_t nPoints = ACCESS(pts, myAddr, nSets, 0).n;
 
-    const float x = ACCESS(pts, myAddr, nSets, 1).z;
-    const float y = ACCESS(pts, myAddr, nSets, 1).force;
+        const float x = ACCESS(pts, myAddr, nSets, 1).z;
+        const float y = ACCESS(pts, myAddr, nSets, 1).force;
 
-    my_size_t contactIdx;
-    // get contact idx and split idx
-    calcContactPointClobbered(&ACCESS(pts, 0, nSets, 2), nPoints, myAddr, nSets, contactIdx);
-    cuda_contacts[myAddr] = contactIdx;
-    
-    // polyfit sample data (first part)
-    real_t slope=0;
-    real_t yIntersect=0;
-    fitPointsClobbered(&ACCESS(pts, 0, nSets, 2), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
-              myAddr, nSets, slope, yIntersect);
-              
-              
-    cuda_slopes[myAddr] = slope;
-    cuda_yIntersects[myAddr] = yIntersect;
+        my_size_t contactIdx=0;
+        // get contact idx and split idx
+        calcContactPointClobbered(&ACCESS(pts, 0, nSets, 2), nPoints, myAddr, nSets, contactIdx);
+        cuda_contacts[myAddr] = contactIdx;
+        
+        // polyfit sample data (first part)
+        real_t slope=0;
+        real_t yIntersect=0;
+        fitPointsClobbered(&ACCESS(pts, 0, nSets, 2), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
+                myAddr, nSets, slope, yIntersect);
+                
+                
+        cuda_slopes[myAddr] = slope;
+        cuda_yIntersects[myAddr] = yIntersect;
+    }
 }
 
 
@@ -193,20 +196,22 @@ __global__ void kernelSoa(const my_size_t* rowsPerThread, const point_alt_t* pts
 
     int myAddr = tid+bid*bdim;
 
-    const my_size_t nPoints = rowsPerThread[myAddr];
+    if(myAddr < nSets)
+    {
+        const my_size_t nPoints = rowsPerThread[myAddr];
 
-    my_size_t contactIdx;
-    // get contact idx and split idx
-    calcContactPointSoa(&ACCESS(pts, 0, nSets, 0), nPoints, myAddr, nSets, contactIdx);
-    cuda_contacts[myAddr] = contactIdx;
+        my_size_t contactIdx=0;
+        // get contact idx and split idx
+        calcContactPointSoa(&pts[0], nPoints, myAddr, nSets, contactIdx);
+        cuda_contacts[myAddr] = contactIdx;
 
-    // polyfit sample data (first part)
-    real_t slope;
-    real_t yIntersect;
-    fitPointsSoa(&ACCESS(pts, 0, nSets, 0), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
-               myAddr, nSets, slope, yIntersect);
-    cuda_slopes[myAddr] = slope;
-    cuda_yIntersects[myAddr] = yIntersect;
+        // polyfit sample data (first part)
+        real_t slope=0;
+        real_t yIntersect=0;
+        fitPointsSoa(&pts[0], contactIdx+1, myAddr, nSets, slope, yIntersect);
+        cuda_slopes[myAddr] = slope;
+        cuda_yIntersects[myAddr] = yIntersect;
+    }
 }
 
 __device__ __host__ bool calcContactPointSoa(const point_alt_t* pts, my_size_t nPoints, const my_size_t set_idx, const my_size_t lda, my_size_t& idx_out)
@@ -268,6 +273,58 @@ __device__ __host__ bool fitPointsSoa(const point_alt_t* pts, my_size_t nPoints,
     return true;
 }
 
+__host__ void checkResultsSoa(const my_size_t* cuda_contactsSoa, const real_t* cuda_slopesSoa, const real_t* cuda_yIntersectsSoa, const my_size_t* cuda_contacts, const real_t* cuda_slopes, const real_t* cuda_yIntersects, const my_size_t nSets)
+{
+    #pragma omp parallel for schedule(static) 
+    for(my_size_t myAddr=0; myAddr < nSets; myAddr++)
+    {
+        if(cuda_contactsSoa[myAddr] != cuda_contacts[myAddr])
+        {
+            cerr << "contactIdx mismatch at set " << myAddr << ": expected " << cuda_contacts[myAddr] << "; actual " << cuda_contactsSoa[myAddr] << endl;
+        }
+        
+        if(cuda_slopesSoa[myAddr] != cuda_slopes[myAddr])
+        {
+            cerr << "slope mismatch at set " << myAddr << ": expected " << cuda_slopes[myAddr] << "; actual " << cuda_slopesSoa[myAddr] << endl;
+        }
+        
+        if(cuda_yIntersectsSoa[myAddr] != cuda_yIntersects[myAddr])
+        {
+            cerr << "yIntersect mismatch at set " << myAddr << ": expected " << cuda_yIntersects[myAddr] << "; actual " << cuda_yIntersectsSoa[myAddr] << endl;
+        }
+        /*
+        const my_size_t nPoints = rowsPerThread[myAddr];
+    
+        my_size_t contactIdx;
+        // get contact idx and split idx
+        bool succ = calcContactPointSoa(&ACCESS(pts, 0, nSets, 0), nPoints, myAddr, nSets, contactIdx);
+        
+        if(succ && contactIdx != cuda_contacts[myAddr])
+        {
+            cerr << "contactIdx mismatch at set " << myAddr << ": expected " << cuda_contacts[myAddr] << "; actual " << contactIdx << endl;
+        }
+
+        // polyfit sample data (first part)
+        real_t slope=0;
+        real_t yIntersect=0;
+        succ = fitPointsSoa(&ACCESS(pts, 0, nSets, 0), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
+               myAddr, nSets, slope, yIntersect);
+                
+//         if(succ)
+        {
+            if(slope != cuda_slopes[myAddr])
+            {
+                cerr << "slope mismatch at set " << myAddr << ": expected " << cuda_slopes[myAddr] << "; actual " << slope << endl;
+            }
+            
+            if(yIntersect != cuda_yIntersects[myAddr])
+            {
+                cerr << "yIntersect mismatch at set " << myAddr << ": expected " << cuda_yIntersects[myAddr] << "; actual " << yIntersect << endl;
+            }
+        }*/
+    }
+}
+
 int main(int argc, char** argv)
 {
     if(argc != 2)
@@ -277,6 +334,11 @@ int main(int argc, char** argv)
     }
 
     ifstream in(argv[1]);
+    if(!in.good())
+    {
+        cerr << "something wrong with file" << endl;
+        return -3;
+    }
 
     my_size_t columns; // number of sets
     my_size_t rows; // number of points in each set
@@ -325,21 +387,15 @@ int main(int argc, char** argv)
     
     
     vector<my_size_t> contactResults(columns);
-    cudaMemcpy(contactResults.data(), cuda_contacts, sizeof(*cuda_contacts) * columns, cudaMemcpyDeviceToHost);
-    cudaFree(cuda_contacts);
-    cuda_contacts = nullptr;
-        
     vector<real_t> slopesResults(columns);
-    cudaMemcpy(slopesResults.data(), cuda_slopes, sizeof(*cuda_slopes) * columns, cudaMemcpyDeviceToHost);
-    cudaFree(cuda_slopes);
-    cuda_slopes = nullptr;
-    
     vector<real_t> yIntsctResults(columns);
-    cudaMemcpy(yIntsctResults.data(), cuda_yIntersects, sizeof(*cuda_yIntersects) * columns, cudaMemcpyDeviceToHost);
-    cudaFree(cuda_yIntersects);
-    cuda_yIntersects = nullptr;
     
-    duration<double, std::milli> cpuClobbered_time;
+    // write results back to host mem
+    cudaMemcpy(contactResults.data(), cuda_contacts, sizeof(*cuda_contacts) * columns, cudaMemcpyDeviceToHost);
+    cudaMemcpy(slopesResults.data(), cuda_slopes, sizeof(*cuda_slopes) * columns, cudaMemcpyDeviceToHost);
+    cudaMemcpy(yIntsctResults.data(), cuda_yIntersects, sizeof(*cuda_yIntersects) * columns, cudaMemcpyDeviceToHost);
+    
+    duration<double, std::milli> cpuClobbered_time, cpuSoa_time;
     {
     auto t1 = high_resolution_clock::now();
     checkResultsClobbered(sets_clobbered, contactResults.data(), slopesResults.data(), yIntsctResults.data(), columns);
@@ -429,10 +485,20 @@ int main(int argc, char** argv)
     float kernelSoa_time;
     cudaEventElapsedTime(&kernelSoa_time, start, stop);
     
-    duration<double, std::milli> cpuSoa_time;
+    
     {
+    vector<my_size_t> contactResultsSoa(columns);
+    vector<real_t> slopesResultsSoa(columns);
+    vector<real_t> yIntsctResultsSoa(columns);
+    
+    // write results back to host mem
+    cudaMemcpy(contactResultsSoa.data(), cuda_contacts, sizeof(*cuda_contacts) * columns, cudaMemcpyDeviceToHost);
+    cudaMemcpy(slopesResultsSoa.data(), cuda_slopes, sizeof(*cuda_slopes) * columns, cudaMemcpyDeviceToHost);
+    cudaMemcpy(yIntsctResultsSoa.data(), cuda_yIntersects, sizeof(*cuda_yIntersects) * columns, cudaMemcpyDeviceToHost);
+    
+    checkResultsSoa(contactResultsSoa.data(), slopesResultsSoa.data(), yIntsctResultsSoa.data(), contactResults.data(), slopesResults.data(), yIntsctResults.data(), columns);
+    
     auto t1 = high_resolution_clock::now();
-    checkResultsSoa(sets_clobbered, contactResults.data(), slopesResults.data(), yIntsctResults.data(), columns);
     auto t2 = high_resolution_clock::now();
     cpuSoa_time = t2 - t1;
     }
@@ -450,6 +516,9 @@ fail:
     
 fail2:
     cudaFree(pointsPerSetCuda);
+    cudaFree(cuda_contacts);
+    cudaFree(cuda_slopes);
+    cudaFree(cuda_yIntersects);
     
 fail3:
     cudaEventDestroy(start);
