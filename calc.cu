@@ -292,36 +292,24 @@ __host__ void checkResultsSoa(const my_size_t* cuda_contactsSoa, const real_t* c
         {
             cerr << "yIntersect mismatch at set " << myAddr << ": expected " << cuda_yIntersects[myAddr] << "; actual " << cuda_yIntersectsSoa[myAddr] << endl;
         }
-        /*
+    }
+}
+
+__host__ void calcCpuSoa(const my_size_t* rowsPerThread, const point_alt_t* pts, const my_size_t nSets)
+{
+    #pragma omp parallel for schedule(static)
+    for(my_size_t myAddr=0; myAddr < nSets; myAddr++)
+    {
         const my_size_t nPoints = rowsPerThread[myAddr];
-    
-        my_size_t contactIdx;
+
+        my_size_t contactIdx=0;
         // get contact idx and split idx
-        bool succ = calcContactPointSoa(&ACCESS(pts, 0, nSets, 0), nPoints, myAddr, nSets, contactIdx);
-        
-        if(succ && contactIdx != cuda_contacts[myAddr])
-        {
-            cerr << "contactIdx mismatch at set " << myAddr << ": expected " << cuda_contacts[myAddr] << "; actual " << contactIdx << endl;
-        }
+        calcContactPointSoa(&pts[0], nPoints, myAddr, nSets, contactIdx);
 
         // polyfit sample data (first part)
         real_t slope=0;
         real_t yIntersect=0;
-        succ = fitPointsSoa(&ACCESS(pts, 0, nSets, 0), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
-               myAddr, nSets, slope, yIntersect);
-                
-//         if(succ)
-        {
-            if(slope != cuda_slopes[myAddr])
-            {
-                cerr << "slope mismatch at set " << myAddr << ": expected " << cuda_slopes[myAddr] << "; actual " << slope << endl;
-            }
-            
-            if(yIntersect != cuda_yIntersects[myAddr])
-            {
-                cerr << "yIntersect mismatch at set " << myAddr << ": expected " << cuda_yIntersects[myAddr] << "; actual " << yIntersect << endl;
-            }
-        }*/
+        fitPointsSoa(&pts[0], contactIdx+1, myAddr, nSets, slope, yIntersect);
     }
 }
 
@@ -420,6 +408,7 @@ int main(int argc, char** argv)
     rows--; // first row of sets_clobbered containing sizes, just read them
     rows--; // here are the x,y positions stored, which we ignore for now
 
+    // prepare datapoints for usage on CPU
     soaPoints.resize(rows);
     if(cudaMalloc(&soaPointsCuda, sizeof(*soaPointsCuda) * rows) != cudaSuccess) goto fail2;
     for(my_size_t i=0; i<rows; i++)
@@ -444,7 +433,17 @@ int main(int argc, char** argv)
             soaPoints[i].z[j] = tmp.z;
             soaPoints[i].force[j] = tmp.force;
         }
+    }
 
+    {
+    auto t1 = high_resolution_clock::now();
+    calcCpuSoa(pointsPerSet.data(), soaPoints.data(), columns);
+    auto t2 = high_resolution_clock::now();
+    cpuSoa_time = t2 - t1;
+    }
+    
+    for(my_size_t i=0; i<rows; i++)
+    {
         // alloc device mem for data points
         real_t* tmpCudaZ = nullptr;
         real_t* tmpCudaForce = nullptr;
@@ -496,11 +495,9 @@ int main(int argc, char** argv)
     cudaMemcpy(slopesResultsSoa.data(), cuda_slopes, sizeof(*cuda_slopes) * columns, cudaMemcpyDeviceToHost);
     cudaMemcpy(yIntsctResultsSoa.data(), cuda_yIntersects, sizeof(*cuda_yIntersects) * columns, cudaMemcpyDeviceToHost);
     
+    // assert that the results of soa kernel and clobbered kernel are same
     checkResultsSoa(contactResultsSoa.data(), slopesResultsSoa.data(), yIntsctResultsSoa.data(), contactResults.data(), slopesResults.data(), yIntsctResults.data(), columns);
     
-    auto t1 = high_resolution_clock::now();
-    auto t2 = high_resolution_clock::now();
-    cpuSoa_time = t2 - t1;
     }
     
     cout << "gpu timing in ms:\n" << "  kernelClobbered: " << kernelClobbered_time << "\n  kernelSoa: " << kernelSoa_time << endl;
