@@ -53,64 +53,67 @@ void parse_lines(const vector<string>& lines, dataset& data_out)
         if(line.size() > 1)
         {
             vector<string> tokens = split_str(line.c_str());
-            if(tokens.size() >= 2 && tokens[0][0] == '#')
+            if(tokens.size() >= 2)
             {
-                if(tokens[1] == "index:")
+                if(tokens[0][0] == '#')
                 {
-                    long val = stol(tokens[2]);
-                    if(!data_out.idx)
+                    if(tokens[1] == "index:")
                     {
-                        data_out.idx = val;
-                    }
-                    else
-                    {
-                        if(*data_out.idx != val)
+                        long val = stol(tokens[2]);
+                        if(!data_out.idx)
                         {
-                            throw runtime_error("file corrupt, index changed!");
+                            data_out.idx = val;
+                        }
+                        else
+                        {
+                            if(*data_out.idx != val)
+                            {
+                                throw runtime_error("file corrupt, index changed!");
+                            }
+                        }
+                    }
+                    else if(tokens[1] == "xPosition:" || tokens[1] == "yPosition:")
+                    {
+                        float val = std::stof(str_to_parse=tokens[2]);
+
+                        if(tokens[1][0] == 'x')
+                        {
+                            data_out.x = val;
+                        }
+                        else
+                        {
+                            data_out.y = val;
+                        }
+                    }
+                    else if(tokens[1] == "segment:")
+                    {
+                        if(tokens[2].find("extend") != string::npos)
+                        {
+                            reading_extend_section = true;
+                        }
+                        else if(tokens[2].find("retract") != string::npos)
+                        {
+                            reading_extend_section = false;
+                        }
+                        else
+                        {
+                            throw runtime_error("file corrupt, unknown segment: '" + tokens[2]+"'");
                         }
                     }
                 }
-                else if(tokens[1] == "xPosition:" || tokens[1] == "yPosition:")
+                else
                 {
-                    float val = std::stof(str_to_parse=tokens[2]);
+                    if(data_out.idx)
+                    {
+                        point_t m;
+                        m.z = std::stof(str_to_parse=tokens[0]);
+                        m.force = std::stof(str_to_parse=tokens[1]);
 
-                    if(tokens[1][0] == 'x')
-                    {
-                        data_out.x = val;
+                        if(reading_extend_section)
+                            data_out.extend.push_back(m);
+                        else
+                            data_out.retract.push_back(m);
                     }
-                    else
-                    {
-                        data_out.y = val;
-                    }
-                }
-                else if(tokens[1] == "segment:")
-                {
-                    if(tokens[2].find("extend") != string::npos)
-                    {
-                        reading_extend_section = true;
-                    }
-                    else if(tokens[2].find("retract") != string::npos)
-                    {
-                        reading_extend_section = false;
-                    }
-                    else
-                    {
-                        throw runtime_error("file corrupt, unknown segment: '" + tokens[2]+"'");
-                    }
-                }
-            }
-            else
-            {
-                if(data_out.idx)
-                {
-                    point_t m;
-                    m.z = std::stof(str_to_parse=tokens[0]);
-                    m.force = std::stof(str_to_parse=tokens[1]);
-
-                    if(reading_extend_section)
-                        data_out.extend.push_back(m);
-                    else
-                        data_out.retract.push_back(m);
                 }
             }
         }
