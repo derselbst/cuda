@@ -53,7 +53,7 @@ void parse_lines(const vector<string>& lines, dataset& data_out)
         if(line.size() > 1)
         {
             vector<string> tokens = split_str(line.c_str());
-            if(tokens[0][0] == '#')
+            if(tokens.size() >= 2 && tokens[0][0] == '#')
             {
                 if(tokens[1] == "index:")
                 {
