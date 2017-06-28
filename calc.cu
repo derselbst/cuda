@@ -1,5 +1,5 @@
 
-// nvcc -std=c++11 calc.cu -o calc -res-usage -g -O2 -Xcompiler "-fopenmp"
+// nvcc -std=c++11 calc.cu -o calc -res-usage -arch=compute_61 -g -O2 -Xcompiler "-fopenmp"
 
 #include <iostream>
 #include <fstream>
