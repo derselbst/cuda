@@ -29,34 +29,37 @@ __global__ void kernelClobbered(const point_t* pts, const my_size_t nSets, my_si
 
     if(myAddr < nSets)
     {
-        const my_size_t nPoints = ACCESS(pts, myAddr, nSets, 0).n;
+        for(my_size_t k=0; k<1000; k++)
+        {
+            const my_size_t nPoints = ACCESS(pts, myAddr, nSets, 0).n;
 
-        const float x = ACCESS(pts, myAddr, nSets, 1).z;
-        const float y = ACCESS(pts, myAddr, nSets, 1).force;
+            const float x = ACCESS(pts, myAddr, nSets, 1).z;
+            const float y = ACCESS(pts, myAddr, nSets, 1).force;
 
-        my_size_t contactIdx=0;
-        // get contact idx and split idx
-        calcContactPointClobbered(&ACCESS(pts, 0, nSets, 2), nPoints, myAddr, nSets, contactIdx);
-        __syncthreads();
-        
-        cuda_contacts[myAddr] = contactIdx;
-        
-        // polyfit sample data (first part)
-        real_t slope=0;
-        real_t yIntersect=0;
-        fitPointsClobbered(&ACCESS(pts, 0, nSets, 2), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
-                myAddr, nSets, slope, yIntersect);
-        __syncthreads();
-                
-        cuda_slopes[myAddr] = slope;
-        cuda_yIntersects[myAddr] = yIntersect;
-        
-        // fit from contact point to split index (guessed)
-        my_size_t splitIdx = contactIdx+1 +10;
-        fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+(contactIdx+1)), splitIdx, myAddr, nSets, slope, yIntersect);
-        
-        // fit from split index to end
-        fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+splitIdx), nPoints-splitIdx, myAddr, nSets, slope, yIntersect);
+            my_size_t contactIdx=0;
+            // get contact idx and split idx
+            calcContactPointClobbered(&ACCESS(pts, 0, nSets, 2), nPoints, myAddr, nSets, contactIdx);
+            __syncthreads();
+            
+            cuda_contacts[myAddr] = contactIdx;
+            
+            // polyfit sample data (first part)
+            real_t slope=0;
+            real_t yIntersect=0;
+            fitPointsClobbered(&ACCESS(pts, 0, nSets, 2), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
+                    myAddr, nSets, slope, yIntersect);
+            __syncthreads();
+                    
+            cuda_slopes[myAddr] = slope;
+            cuda_yIntersects[myAddr] = yIntersect;
+            
+            // fit from contact point to split index (guessed)
+            my_size_t splitIdx = contactIdx+1 +10;
+            fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+(contactIdx+1)), splitIdx, myAddr, nSets, slope, yIntersect);
+            
+            // fit from split index to end
+            fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+splitIdx), nPoints-splitIdx, myAddr, nSets, slope, yIntersect);
+        }
     }
 }
     
@@ -159,31 +162,34 @@ __global__ void kernelSoa(const my_size_t* rowsPerThread, const point_alt_t* pts
 
     if(myAddr < nSets)
     {
-        const my_size_t nPoints = rowsPerThread[myAddr];
+        for(my_size_t k=0; k<1000; k++)
+        {
+            const my_size_t nPoints = rowsPerThread[myAddr];
 
-        my_size_t contactIdx=0;
-        // get contact idx and split idx
-        calcContactPointSoa(&pts[0], nPoints, myAddr, nSets, contactIdx);
-        __syncthreads();
-        
-        cuda_contacts[myAddr] = contactIdx;
+            my_size_t contactIdx=0;
+            // get contact idx and split idx
+            calcContactPointSoa(&pts[0], nPoints, myAddr, nSets, contactIdx);
+            __syncthreads();
+            
+            cuda_contacts[myAddr] = contactIdx;
 
-        // polyfit sample data (first part)
-        real_t slope=0;
-        real_t yIntersect=0;
-        fitPointsSoa(&pts[0], contactIdx+1, myAddr, nSets, slope, yIntersect);
-        __syncthreads();
-        
-        cuda_slopes[myAddr] = slope;
-        cuda_yIntersects[myAddr] = yIntersect;
-        
-        // guess split index
-        my_size_t splitIndex = contactIdx+1+10;
-        // polyfit from contactidx to splitidx
-        fitPointsSoa(&pts[contactIdx+1], splitIndex+1, myAddr, nSets, slope, yIntersect);
-        
-        //polyfit from split idx to end
-        fitPointsSoa(&pts[splitIndex+1], nPoints-splitIndex, myAddr, nSets, slope, yIntersect);
+            // polyfit sample data (first part)
+            real_t slope=0;
+            real_t yIntersect=0;
+            fitPointsSoa(&pts[0], contactIdx+1, myAddr, nSets, slope, yIntersect);
+            __syncthreads();
+            
+            cuda_slopes[myAddr] = slope;
+            cuda_yIntersects[myAddr] = yIntersect;
+            
+            // guess split index
+            my_size_t splitIndex = contactIdx+1+10;
+            // polyfit from contactidx to splitidx
+            fitPointsSoa(&pts[contactIdx+1], splitIndex+1, myAddr, nSets, slope, yIntersect);
+            
+            //polyfit from split idx to end
+            fitPointsSoa(&pts[splitIndex+1], nPoints-splitIndex, myAddr, nSets, slope, yIntersect);
+        }
     }
 }
 
