@@ -1,27 +1,52 @@
-\chapter{Einleitung / Aufgabenstellung}
-Die Herstellung komplexer und hochintegrierter mikroelektronischer Schaltkreise stellt höchste Anforderungen an die Geräte,
-% und Maschinen
-die zu deren Herstellung eingesetzt werden.
-Während des gesamten Produktionsprozesses müssen sehr hohe Qualitätsstandards eingehalten werden.
-Es ist davon auszugehen, dass die Integrationsdichte integrierter Schaltungen immer größer werden wird, d.h. es müssen immer feinere Strukturen auf einer Fläche abgebildet werden.
-\\\\
-Die {\betrieb} ist ein führender Ausstatter der Halbleiterindustrie.
-Zum Portfolio gehören unter anderem Photomaskensysteme, welche im Herstellungsprozess von hochintegrierten Schaltkreisen eingesetzt werden.
-\\\\
-Damit ZEISS als wichtiger Partner der Halbleiterindustrie auch weiterhin hochwertige Produkte an seine Kunden ausliefern kann, bedarf es im Vorfeld intensiver Produkttests und im Nachgang ständiger Unterstützung des Kunden bei der Wartung dieser Photomaskensysteme.
-\\\\
-%reihenfolge beachten zuerst aimseuv
-Der Service--Mitarbeiter muss in die Lage versetzt werden, bei einem solch komplexen System
-%, und im vorliegenden Fall der zugehörigen Wasserkühlung, 
-einen schnellen und präzisen Überblick über die Baugruppen und Module zu erhalten.
-Dazu ist es notwendig, dass ihm zur Unterstützung bei seiner Arbeit ein entsprechendes Werkzeug zur Verfügung gestellt wird.
-Die Herausforderung bei solchen Service- und Diagnose--Anwendungen besteht darin, eine einfache und übersichtliche Darstellung zur Fehlererkennung und -lokalisierung bereitzustellen. Andererseits müssen komplexe und spezifische Informationen über jeden Teil der Komponente erfasst sein.
-\\\\
-Im Rahmen dieser {\arbeit} soll die Entwicklung einer \textbf{apfelsaftpresse} vorgestellt werden, die Hilfestellung bei der Errichtung und Wartung der Wasserkühlung für das {\aimseuv} bietet.
+
+\chapter{Sinn und Zweck paralleler Programmierung}
+\label{intro}
+Seit Beginn der Rechentechnik Anfang der 40er Jahre verfolgen Informatiker ein Ziel: Die zur Verfügung stehende Rechenleistung soll effizient genutzt werden.
+
+Die parallele Programmierung stellt eine wesentliche Maßnahme dar, um dieses Ziel zu erreichen. Mit dieser Arbeit  soll die Umsetzung eines gegebenen Problems auf einer Grafikkarte mittels nVidia CUDA vorgestellt werden.
+
+Parallele Programme beschreiben potentiell gleichzeitig ablaufende Aktivitäten, die miteinander kooperieren, um eine gemeinsame Aufgabe zu lösen. Dies setzt Programme voraus, die unabhängig von der Anzahl und der Geschwindigkeit der Prozessoren die gewünschten Ergebnisse liefern. Die Softwareentwicklung für parallele Algorithmen ist deshalb im Vergleich zur sequentiellen Programmierung wesentlich komplexer.
+
+Durch die Aufteilung eines Programms in sogenannte \textbf{Threads} (\glqq leichtgewichtige Prozesse\grqq) lassen sich die Ressourcen heutiger Mirkoprozessoren effizient nutzen.
+Threads besitzen dabei folgende Eigenschaften:
+\begin{itemize}
+\item sind sequentielle Befehlsausführungen
+\item stellen Einheit für die Prozessorzuteilung dar
+\item laufen in einem Prozessadressraum ab
+\end{itemize}
+Mit der Einführung von Threads werden im wesentlichen zwei Ziele verfolgt:
+\begin{enumerate}
+\item Strukturierung unabhängiger Programme und Programmkomponenten
+\item Leistungssteigerung durch effiziente Parallelarbeit
+\end{enumerate}
+
+%Besonders aus der Möglichkeit der effizienten Parallelarbeit geht ein weiterer wesentlicher Vorteil hervor:
+Die Leistungsfähigkeit von Programmen ist hauptsächlich abhängig von der Taktrate der CPU. Erhöht sich die Taktrate, wird ebenso das Programm schneller.
+Allerdings haben die Taktraten heutiger CPUs einen Grenzwert erreicht.
+Größere Taktraten würden diverse technische Probleme mit sich bringen, wie beispielsweise erhöhte Wärmeentwicklung auf dem Prozessor und damit verbundene, eine geeignete Wärmeabfuhr zu finden.
+Daher gehen Chiphersteller schon seit einigen Jahren den Weg, möglichst viele Recheneinheiten (Kerne) auf einer CPU unterzubringen. Grafikprozessoren sind von Haus aus mit einer deutlich größeren Anzahl an Kernen ausgestattet.
+Programme die entsprechend implementiert wurde diese Technologien effizient zu nutzen, können einen deutlichen Geschwindigkeitsvorteil gegenüber einer parallelen Ausführung auf einer CPU aufweisen.
 
 
-\chapter{Grundlagen}
- 
+\chapter{Aufgabenstellung}
+Gegeben Kraft-Abstandskurven eines Rasterkraftmikroskops. Rasterkraftmikroskope werden zur Untersuchung von Oberflächen genutzt, um bspw. ein Höhenprofil erstellen zu können. Hierzu wird die vorliegende Oberfläche an möglichst vielen Stellen mit einer ca. 40 nm großen Spitze abgetastet, d.h. es wird zu jeder Messhöhe die der Abtastspitze entgegengebrachte Kraft gemessen.
+Ein Ausschnitt einer solchen Kraft-Abstandskurve ist in Abbildung \ref{fig:kraftbsp} dargestellt.
+
+\begin{figure}[h!]
+\centering
+ \begin{tikzpicture}[scale=1]
+ \begin{axis}[
+   width=15cm,
+   xlabel=Messhöhe in m,
+   ylabel=Kraft in N]
+ \addplot table [y=$Q_A$, x=P]{ex.txt};
+ %\addlegendentry{$Q_A$ series}
+ \end{axis}
+ \end{tikzpicture}
+\caption{Ausschnitt einer Kraft-Abstandskurve}
+\label{fig:kraftbsp}
+\end{figure}
+
 geg: datensätze: ergebnisse der abtastung von oberflächen in der elektronen mikroskopie
 
 
@@ -80,7 +105,7 @@ tuple_t datasets[N][M];
 jeder thread bearbeitet einen datensatz. daher sieht es für jeden thread so aus, als handle es sich bei datasets um ein SoA. d.h. beim ersten zugriff auf datasets liest jeder thread die erste messreihe seines datensatzes ein, beim zweiten zugriff die zweite messreihe, etc.
 
 \subsection{optimiertes datenmodell}
-optimalerweise erhält jeder thread durch einen lesevorgang ein 4 byte wort aus der cacheline. tuple_t hat jedoch eine größe von 8bytes. es braucht als zwei lesevorgänge um alle threads eines warps??? mit daten zu versorgen.
+optimalerweise erhält jeder thread durch einen lesevorgang ein 4 byte wort aus der cacheline. tuple\_t hat jedoch eine größe von 8bytes. es braucht als zwei lesevorgänge um alle threads eines warps??? mit daten zu versorgen.
 daher folgende optimierung:
 
 \begin{lstlisting}
@@ -88,7 +113,7 @@ struct tuple_t { float z[N],f[N]; };
 tuple_t datasets[M];
 \end{lstlisting}
 
-nun ist tuple_t ein reines soa welches M mal existiert und jeweils zeiger auf arrays enthält, die die z und force messwerte der N datensätze enthält. diese können somit von N threads single strided bearbeitet werden:
+nun ist tuple\_t ein reines soa welches M mal existiert und jeweils zeiger auf arrays enthält, die die z und force messwerte der N datensätze enthält. diese können somit von N threads single strided bearbeitet werden:
 
 \begin{lstlisting}
 tuple_t datasets[M];
@@ -114,8 +139,14 @@ referenz implementierung 11 MiB/s von SSD
 
 referenz implementierung 11 minuten insgesamt
 
+
 \section{berechnung}
 65536*2 Datensätze:
-Clobbered Ansatz: GPU: 3.5 ms CPU Single: 545 ms CPU 4HWThreads: 199 ms
+AoS Ansatz: GPU: 3.5 ms CPU Single: 545 ms CPU 4HWThreads: 199 ms
 SOA Ansatz: GPU: 2.27 ms CPU: ??
 
+benchmarking mit double? verdoppelt zeit da wir genug double precision units haben aber eben zwei cachlines lesen müssen anstatt von nur einer
+
+\section{CPU vs. GPU}
+
+diagramm bei variierender anz datensätze auf cpu und gpu
