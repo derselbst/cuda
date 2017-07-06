@@ -30,6 +30,13 @@ Programme die entsprechend implementiert wurde diese Technologien effizient zu n
 
 \chapter{Aufgabenstellung}
 Gegeben Kraft-Abstandskurven eines Rasterkraftmikroskops. Rasterkraftmikroskope werden zur Untersuchung von Oberflächen genutzt, um bspw. ein Höhenprofil erstellen zu können. Hierzu wird die vorliegende Oberfläche an möglichst vielen Stellen mit einer ca. 40 nm großen Spitze abgetastet, d.h. es wird zu jeder Messhöhe die der Abtastspitze entgegengebrachte Kraft gemessen.
+Der Verlauf einer solchen Kraft-Abstandskurve lässt sich in drei lineare Funktionen unterteilen und ist qualitativ in Abbildung \reg{fig:kraftqual} dargestellt.
+
+Der grüne Kurvenverlauf stellt die Annäherung der Abtastspitze zur Probe dar. Auffällig ist, dass die entgegengebrachte Kraft bei diesem Vorgang konstant bleibt.
+Die gelbe Kurve zeigt, wie die Spitze von den Adhäsionskraften zwischen ihr und der Probe erfasst wird. Die entgegengebrachte Kraft fällt daher rapide ab, bis die Spitze Kontakt mit der Probe an der Stelle $c$ hergestellt hat.
+Der rote Kurvenabschnitt zeigt, wie die auf die Spitze einwirkende Kraft nach Kontaktherstellung stark zunimmt, während weiterhin versucht wird, sich der Probe anzunähern.
+
+Ziel ist es nun, die gegebene Punktewolke eines realen Rasterkraftmikroskops in diese drei linearen Funktionen zu zerlegen.
 Ein Ausschnitt einer solchen Kraft-Abstandskurve ist in Abbildung \ref{fig:kraftbsp} dargestellt.
 
 \begin{figure}[h!]
@@ -47,7 +54,7 @@ Ein Ausschnitt einer solchen Kraft-Abstandskurve ist in Abbildung \ref{fig:kraft
 \label{fig:kraftbsp}
 \end{figure}
 
-geg: datensätze: ergebnisse der abtastung von oberflächen in der elektronen mikroskopie
+Aufgenommen wurden solche Abtastungen an 256x*256y Positionen, wobei sowohl eine Messung für das Anfahren auf die Probe und das Ablassen von ihr aufgezeichnet wurde. Es liegen also insgesamt 131072 Datensätze vor, mittels dreifach linearer Regression auf einer GPU in die oben beschriebene Form gebracht werden sollen.
 
 
 jeder datensatz enthält für eine x und y position (i.e. position auf der oberfläche) die höhe der abgetasteten fläche und die der abtastspitze entgegengebrachte kraft
