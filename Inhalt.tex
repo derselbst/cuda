@@ -32,19 +32,19 @@ Programme die entsprechend implementiert wurde diese Technologien effizient zu n
 Gegeben Kraft-Abstandskurven eines Rasterkraftmikroskops. Rasterkraftmikroskope werden zur Untersuchung von Oberflächen genutzt, um bspw. ein Höhenprofil erstellen zu können. Hierzu wird die vorliegende Oberfläche an möglichst vielen Stellen mit einer ca. 40 nm großen Spitze abgetastet, d.h. es wird zu jeder Messhöhe die der Abtastspitze entgegengebrachte Kraft gemessen.
 Der Verlauf einer solchen Kraft-Abstandskurve lässt sich in drei lineare Funktionen unterteilen und ist qualitativ in Abbildung \ref{fig:kraftqual} dargestellt.
 
-Der grüne Kurvenverlauf stellt die Annäherung der Abtastspitze zur Probe dar. Auffällig ist, dass die entgegengebrachte Kraft bei diesem Vorgang konstant bleibt.
-Die gelbe Kurve zeigt, wie die Spitze von den Adhäsionskraften zwischen ihr und der Probe erfasst wird. Die entgegengebrachte Kraft fällt daher rapide ab, bis die Spitze Kontakt mit der Probe an der Stelle $c$ hergestellt hat.
-Der rote Kurvenabschnitt zeigt, wie die auf die Spitze einwirkende Kraft nach Kontaktherstellung stark zunimmt, während weiterhin versucht wird, sich der Probe anzunähern.
-
-Ziel ist es nun, die gegebene Punktewolke eines realen Rasterkraftmikroskops in diese drei linearen Funktionen zu zerlegen.
-Ein Ausschnitt einer solchen Kraft-Abstandskurve ist in Abbildung \ref{fig:kraftbsp} dargestellt.
-
 \begin{figure}[h!]
 \centering
 \includegraphics[scale=0.5]{qual.pdf}
 \caption{Qualitativer Verlauf einer Kraft-Abstandskurve}
 \label{fig:kraftqual}
 \end{figure}
+
+Der grüne Kurvenverlauf stellt die Annäherung der Abtastspitze zur Probe dar. Auffällig ist, dass die entgegengebrachte Kraft bei diesem Vorgang konstant bleibt.
+Die gelbe Kurve zeigt, wie die Spitze von den Adhäsionskraften zwischen ihr und der Probe erfasst wird. Die entgegengebrachte Kraft fällt daher rapide ab, bis die Spitze Kontakt mit der Probe an der Stelle $c$ hergestellt hat.
+Der rote Kurvenabschnitt zeigt, wie die auf die Spitze einwirkende Kraft nach Kontaktherstellung stark zunimmt, während weiterhin versucht wird, sich der Probe anzunähern.
+
+Ziel ist es nun, die gegebene Punktewolke eines realen Rasterkraftmikroskops in diese drei linearen Funktionen zu zerlegen.
+Ein Ausschnitt einer solchen realen Kraft-Abstandskurve ist in Abbildung \ref{fig:kraftbsp} dargestellt.
 
 
 \begin{figure}[h!]
@@ -62,33 +62,12 @@ Ein Ausschnitt einer solchen Kraft-Abstandskurve ist in Abbildung \ref{fig:kraft
 \label{fig:kraftbsp}
 \end{figure}
 
-Aufgenommen wurden solche Abtastungen an 256x*256y Positionen, wobei sowohl eine Messung für das Anfahren auf die Probe als auch das Ablassen von ihr aufgezeichnet wurde. Es liegen also insgesamt 131072 Datensätze vor, deren je 300 Abtastwerte mittels dreifach linearer Regression auf einer GPU in die oben beschriebene Form gebracht werden sollen.
+Aufgenommen wurden solche Abtastungen an 256x*256y Positionen, wobei sowohl eine Messung für das Anfahren auf die Probe als auch das Ablassen von ihr aufgezeichnet wurde. Es liegen also insgesamt 131072 Datensätze vor, deren je 300 Abtastwerte mittels dreifach linearer Regression auf einer GPU in die oben beschriebene Form gebracht werden sollen, indem der Kontaktpunkt mit der Probe und der Splitindex gefunden werden.
 
-%
-%jeder datensatz enthält für eine x und y position (i.e. position auf der oberfläche) die höhe der abgetasteten fläche und die der abtastspitze entgegengebrachte kraft
-%
-%es existieren 256 x 256 datensätze, also 65536 datensätze mit je ca. 600 messwerten, d.h. 2*300 Messwerte für einen absenkteil und zurückzieher teil.
-%
-%messwerte jedes datensatzes ergeben kurve
-%
-%           /
-%          /
-%----\    /
-%     \  /
-%      \/
-%% ^
-% annäherung der probe
-% %      ^
-%       kontakt punkt (adhäsionskräfte)
-% %        ^ entgegengebrachte kraft
-%         
-gegebenen datenpunkte sind mittels polyfit  in drei lineare zu approximieren. anschließend anhand der drei approximierten funktionen: bestimmung: kontaktpunkt, ansteig kurve entgegenbebrachte kraft, split index
 
-herangehensweise: 
-
-\section{parsen der daten}
-daten liegen als csv dateien vor, deren messwerte spalten und zeilenweise gespeichert sind. diese 100KB kleinen textdateien einlesen und verarbeiten.
-problem: hoher overhead seitens des OS aufgrund häufigem öffnen / schliessen der dateien. dateien sind klein und nur ca. 1/10 des inhalts wird tatsächlich genutzt, der rest wird ignoriert, da nicht relevant --> erschwert caching dur das OS.
+\section{Einlesen der Datensätze}
+Die Datensätze liegen als Textdeateien vor, wobei an jede Messposition in einer eigenen Datei gepsiechert ist. Es liegen somit 65536 Textdateien vor, in denen die Messwerte für das An-/ und Abfahren von der Probe zeilenweise ähnlich wie in einer CSV Datei gepseichert sind.
+Das Einlesen dieser vielen 100KiB kleinen Dateien wird durch das häufige öffnen und schließen der Dateien und dem damit verbundenen Overhead seitens des Betreibssystems verlangsamt. Zudem werden für die nötigen Berechnungen nur die ersten zwei der insgesamt 14 Datenspalten benötigt, was Caching seitens des OS zusätzlich erschwert.
 
 \section{parallelisierungsmodell}
 aufgrund der hohen anzahl an datensätzen: naive parallelisierung: jeder thread der graka bearbeitet einen datensatz. konkret:
