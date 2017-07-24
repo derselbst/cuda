@@ -69,12 +69,52 @@ Aufgenommen wurden solche Abtastungen an 256x*256y Positionen, wobei sowohl eine
 Die Datensätze liegen als Textdeateien vor, wobei an jede Messposition in einer eigenen Datei gepsiechert ist. Es liegen somit 65536 Textdateien vor, in denen die Messwerte für das An-/ und Abfahren von der Probe zeilenweise ähnlich wie in einer CSV Datei gepseichert sind.
 Das Einlesen dieser vielen 100KiB kleinen Dateien wird durch das häufige öffnen und schließen der Dateien und dem damit verbundenen Overhead seitens des Betreibssystems verlangsamt. Zudem werden für die nötigen Berechnungen nur die ersten zwei der insgesamt 14 Datenspalten benötigt, was Caching seitens des OS zusätzlich erschwert.
 
-\section{parallelisierungsmodell}
-aufgrund der hohen anzahl an datensätzen: naive parallelisierung: jeder thread der graka bearbeitet einen datensatz. konkret:
-- gegebene punktwolke ableiten um den kontaktpunkt zu bestimmen
-- polyfit der kurve nach kontakt mit medium durchführen
-- ermittlung des split index
-- polyfit der kurven vor und nach dem split index durchführen
+
+Das Einlesen aller 65536 Textdateien benötigt auf einer SSD 2 Minuten. Dies kann auf 40 Sekunden reduziert werden, wenn das Einlesen mittels openMP Tasks parallelisiert erfolgt.
+Der Einlesevorgang auf einer konventionellen HDD benötigt aufgrund der trägen Mechanik hingegen mind. 10 Minuten.
+
+Um dies zu umgehen ist eine Vorverarbeitung nötig, die darin besteht, die Textdateien einmalig einzulesen, die Daten zu filtern und zu sortieren und sie anschließend als Binär Blob auszugeben. Der Einlesevorgang kann somit auf wenige Sekunden reduziert werden.
+
+\section{Implementierung des Kernels}
+Als Eingabe erhält der Kernel die aus dem Binär Blob gelesenen Datensätze.
+Der Kernel hat die Aufgabe die Eingangs beschriebene dreifache lineare Regression für jeden Datensatz durchzuführen.
+
+\begin{lstlisting}
+void kernel(const point_t* pts, const int nSets)
+{
+    int myAddr = threadIdx.x+blockIdx.x*blockDim.x;
+
+    if(myAddr < nSets)
+    {
+        const my_size_t nPoints = pts[myAddr].n;
+
+        contactIdx = calcContactPoint(pts[0:nPoints])
+        __syncthreads();
+
+        fitPoints(pts[0:contactIdx]);
+        __syncthreads();
+                
+        my_size_t splitIdx = contactIdx+10;
+        fitPoints(pts[contactIdx:splitIdx+1]);
+
+        fitPoints(pts[splitIdx: nPoints-splitIdx]);
+    }
+}
+\end{lstlisting}
+
+
+Aufgrund der vergleichsweise geringen Anzahl an Messwerten pro Datensätze (=300) erfolgt eine naive Parallelisierung der Datensätze: Jeder Thread der Grafikkarte bearbeitet einen Datensatz. Wie in Codelisting \ref{dings} dargestellt wird hierfür
+
+\begin{itemize}
+\item die gegebene Punktwolke abgeleitet, um den Kontaktpunkt zu bestimmen (Zeile ??),
+\item eine lineare Regression (polyfit) der Kurve vom Ende der Messung bis zum Kontakt mit dem Medium durchgeführt (Zeile ??),
+\item der Split-Index erraten\footnote{Die Berechnung des Split-Indexes erwies sich als zu aufwendig und instabil, daher wurde auf eine Implementierung im Rahmen dieses Seminars verzichtet.} (Zeile ??),
+\item ein polyfit der Kurve zwischen dem Kontaktpunkt bis Split-Index  (Zeile ??) und
+\item ein polyfit der Kurve zwischen Split-Index und Anfang der Messung durchgeführt  (Zeile ??).
+\end{itemize}
+
+Grafikkarten arbeiten im SIMD Verfahren. Um zu verhindern, dass die Threads divergieren, da sich die Kontaktpunkte und die Länge der zu interpolierenden Kurve zwangsläufig zwischen den Datensätzen unterscheiden, wurde in den Zeilen ?? eine Synchronisationsbarrieren auf Thread-Block Ebene eingeführt.
+Diese konnten in der Praxis jedoch keine messbare Veränderung der Laufzeit hervorbringen, da bei nur 300 Messwerten pro Datensatz eine mögliche Divergenz der GPU-Threads zu gering ist.
 
 \section{datenmodell}
 einlesen der daten als AoS:
