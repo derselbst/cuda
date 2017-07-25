@@ -145,6 +145,7 @@ Es empfiehlt sich daher die Datensaetze column major im Speicher abzulegen, wie 
 \paragraph{\gls{soa}}
 Bei NVidia Grafikkarten vor der Pascal Architektur erhält jeder Thread durch einen Lesevorgang ein 32 bit Wort aus der Cacheline\footnote{http://docs.nvidia.com/cuda/pascal-tuning-guide/index.html#shared-memory-bandwidth}. tuple\_t hat jedoch eine Größe von 8 Bytes. 
 Es braucht also zwei Lesevorgänge um alle Threads eines Warps mit Daten zu versorgen.
+Um einen Performanceverlgeich zu der aelteren Kepler Architektur zu erhalten, wird daher auch eine \gls{soa} Variante, wie in Listing \ref{dings} dargestellt, implementiert.
 daher folgende optimierung:
 
 \begin{lstlisting}
@@ -152,7 +153,8 @@ struct tuple_t { float z[N],f[N]; };
 tuple_t datasets[M];
 \end{lstlisting}
 
-nun ist tuple\_t ein reines soa welches M mal existiert und jeweils zeiger auf arrays enthält, die die z und force messwerte der N datensätze enthält. diese können somit von N threads single strided bearbeitet werden:
+Hier ist tuple\_t ein reines \gls{soa}, welches M mal existiert und jeweils Zeiger auf Arrays enthält, welche die N Messwerte z und f des jeweiligen Datensatzes enthalten. Diese können somit von N Threads single strided bearbeitet werden, wie schematisch in Listing \ref{dings} dargestellt.
+Zwar hat tuple\_t nun eine Groesse von 16 Byte, da es zwei 8 Byte Zeiger enthaelt. Dieses Element muss jedoch nur einmalig gelesen werden, da die enthaltenen Zeiger von den N Threads gemeinsam verwendet werden koennen.
 
 \begin{lstlisting}
 tuple_t datasets[M];
@@ -166,6 +168,7 @@ for (i=0; i<M; i++)
     // doWork(myZ, myForce);
 }
 \end{lstlisting}
+
 
 \chapter{benchmarking}
 \section{lesen der textdateien}
