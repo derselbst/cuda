@@ -116,9 +116,11 @@ Aufgrund der vergleichsweise geringen Anzahl an Messwerten pro Datensätze (=300
 Grafikkarten arbeiten im SIMD Verfahren. Um zu verhindern, dass die Threads divergieren, da sich die Kontaktpunkte und die Länge der zu interpolierenden Kurve zwangsläufig zwischen den Datensätzen unterscheiden, wurde in den Zeilen ?? eine Synchronisationsbarrieren auf Thread-Block Ebene eingeführt.
 Diese konnten in der Praxis jedoch keine messbare Veränderung der Laufzeit hervorbringen, da bei nur 300 Messwerten pro Datensatz eine mögliche Divergenz der GPU-Threads zu gering ist.
 
-\section{datenmodell}
-einlesen der daten als AoS:
+\section{Datenmodell}
+Um eine effiziente Verarbeitung auf der Grafikkarte zu erreichen, muessen die Datensaetze in geeigneter Weise strukturiert werden.
+Dazu muss entschieden werden, ob sie Daten als \gls{aos} oder als \gls{soa} uebergeben werden. Nachfolgend werden diese Ansaetze diskutiert.
 
+\paragraph{\gls{aos}}
 \begin{lstlisting}
 struct tuple_t { float z,f; };
 tuple_t datasets[M][N];
@@ -127,19 +129,22 @@ tuple_t datasets[M][N];
 N: anzahl an datensätze
 M: anzahl an messwerten pro datensatz
 
-für grafikkarten ungeeignet, da daten für die einzelene threads zu weit auseinander liegen. caching wird unmöglich, schlimmsten falls führt dies zu einer ausserialisierung der threads.
+Die Auslegung der Daten als \gls{aos} bedeutet, dass die Daten als zweidimensionales Array uebergeben werden, deren Element ein Verbunddatentyp ist, welcher die gemessenene Kraft f an der entsprechenden Messhoehe z enthaelt. Wird das Array wie in Listing \ref{dings} dargestellt row major im Speicher abgelegt, enthaelt also die i-te Speicherzeile die N Messwerte des i-ten Datensatzes.
+Die ist jedoch für Grafikkarten ungeeignet, da die Messwerte für die einzelnen Threads zu weit auseinander liegen. D.h. wird eine Cachline geladen, kann hiervon nur das erste Element (der erste Messwert) verwendet werden. Die anderen Threads benoetigen ebenfalls den ersten Messwert allerdings den des ihnen zugeordneten Datensatzes. Diese befinden sich in anderen Zeilen des Speichers.
+Es muessen somit weitere Cachlines geladen werden, was schlimmsten falls zu einer Ausserialisierung der Threads fuehrt.
 
-daher: datensätze columnmajor im speicher ablegen:
 
 \begin{lstlisting}
 struct tuple_t { float z,f; };
 tuple_t datasets[N][M];
 \end{lstlisting}
 
-jeder thread bearbeitet einen datensatz. daher sieht es für jeden thread so aus, als handle es sich bei datasets um ein SoA. d.h. beim ersten zugriff auf datasets liest jeder thread die erste messreihe seines datensatzes ein, beim zweiten zugriff die zweite messreihe, etc.
+Es empfiehlt sich daher die Datensaetze column major im Speicher abzulegen, wie in Listing \ref{dings} dargestellt. Die i-te Zeile des Speichers enthaelt somit die i-ten Messwerte aller Datensaetze. Da jeder Thread einen Datensatz bearbeitet, koennen alle 32 Threads eines Warps durch eine Cacheline mit Daten versorgt werden.
 
-\subsection{optimiertes datenmodell}
-optimalerweise erhält jeder thread durch einen lesevorgang ein 4 byte wort aus der cacheline. tuple\_t hat jedoch eine größe von 8bytes. es braucht als zwei lesevorgänge um alle threads eines warps??? mit daten zu versorgen.
+
+\paragraph{\gls{soa}}
+Bei NVidia Grafikkarten vor der Pascal Architektur erhält jeder Thread durch einen Lesevorgang ein 32 bit Wort aus der Cacheline\footnote{http://docs.nvidia.com/cuda/pascal-tuning-guide/index.html#shared-memory-bandwidth}. tuple\_t hat jedoch eine Größe von 8 Bytes. 
+Es braucht also zwei Lesevorgänge um alle Threads eines Warps mit Daten zu versorgen.
 daher folgende optimierung:
 
 \begin{lstlisting}
