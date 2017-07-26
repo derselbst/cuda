@@ -29,7 +29,7 @@ __global__ void kernelClobbered(const point_t* pts, const my_size_t nSets, my_si
 
     if(myAddr < nSets)
     {
-        for(my_size_t k=0; k<1000; k++)
+//         for(my_size_t k=0; k<1000; k++)
         {
             const my_size_t nPoints = ACCESS(pts, myAddr, nSets, 0).n;
 
@@ -54,11 +54,11 @@ __global__ void kernelClobbered(const point_t* pts, const my_size_t nSets, my_si
             cuda_yIntersects[myAddr] = yIntersect;
             
             // fit from contact point to split index (guessed)
-            my_size_t splitIdx = contactIdx+1 +10;
-            fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+(contactIdx+1)), splitIdx, myAddr, nSets, slope, yIntersect);
+            my_size_t splitIdx = contactIdx+10;
+//             fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+(contactIdx+1)), (splitIdx-contactIdx), myAddr, nSets, slope, yIntersect);
             
             // fit from split index to end
-            fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+splitIdx), nPoints-splitIdx, myAddr, nSets, slope, yIntersect);
+//             fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+splitIdx), nPoints-splitIdx-1, myAddr, nSets, slope, yIntersect);
         }
     }
 }
@@ -162,7 +162,7 @@ __global__ void kernelSoa(const my_size_t* rowsPerThread, const point_alt_t* pts
 
     if(myAddr < nSets)
     {
-        for(my_size_t k=0; k<1000; k++)
+//         for(my_size_t k=0; k<1000; k++)
         {
             const my_size_t nPoints = rowsPerThread[myAddr];
 
@@ -183,12 +183,12 @@ __global__ void kernelSoa(const my_size_t* rowsPerThread, const point_alt_t* pts
             cuda_yIntersects[myAddr] = yIntersect;
             
             // guess split index
-            my_size_t splitIndex = contactIdx+1+10;
+            my_size_t splitIndex = contactIdx+10;
             // polyfit from contactidx to splitidx
-            fitPointsSoa(&pts[contactIdx+1], splitIndex+1, myAddr, nSets, slope, yIntersect);
+//             fitPointsSoa(&pts[contactIdx+1], (splitIndex-contactIdx), myAddr, nSets, slope, yIntersect);
             
             //polyfit from split idx to end
-            fitPointsSoa(&pts[splitIndex+1], nPoints-splitIndex, myAddr, nSets, slope, yIntersect);
+//             fitPointsSoa(&pts[splitIndex+1], nPoints-splitIndex-1, myAddr, nSets, slope, yIntersect);
         }
     }
 }
@@ -307,196 +307,214 @@ int main(int argc, char** argv)
         return -3;
     }
 
-    my_size_t columns; // number of sets
-    my_size_t rows; // number of points in each set
-    in.read(reinterpret_cast<char*>(&columns), sizeof(columns));
-    in.read(reinterpret_cast<char*>(&rows), sizeof(rows));
+    my_size_t realcolumns; // number of sets
+    my_size_t realrows; // number of points in each set
+    in.read(reinterpret_cast<char*>(&realcolumns), sizeof(realcolumns));
+    in.read(reinterpret_cast<char*>(&realrows), sizeof(realrows));
     
-    vector<point_t> sets_clobbered(columns*rows);
-    in.read(reinterpret_cast<char*>(sets_clobbered.data()), sizeof(point_t) * columns * rows);
+    vector<point_t> sets_clobbered(realcolumns*realrows);
+    in.read(reinterpret_cast<char*>(sets_clobbered.data()), sizeof(point_t) * realcolumns * realrows);
     
-    
-    const dim3 threads(1024);
-    const dim3 grid(columns/threads.x);
-    
-    point_t* sets_clobbered_cuda = nullptr;
-    my_size_t* cuda_contacts = nullptr;
-    real_t* cuda_slopes = nullptr;
-    real_t* cuda_yIntersects = nullptr;    
-    if(cudaMalloc(&sets_clobbered_cuda, sizeof(*sets_clobbered_cuda) * columns*rows) != cudaSuccess) return -1;
-    cudaMemcpy(sets_clobbered_cuda, sets_clobbered.data(), sizeof(*sets_clobbered_cuda) * columns*rows, cudaMemcpyHostToDevice);
-    
-    if(cudaMalloc(&cuda_contacts, sizeof(*cuda_contacts) * columns) != cudaSuccess) return -1;
-    if(cudaMalloc(&cuda_slopes, sizeof(*cuda_slopes) * columns) != cudaSuccess) return -1;
-    if(cudaMalloc(&cuda_yIntersects, sizeof(*cuda_yIntersects) * columns) != cudaSuccess) return -1;
-   
-    
-    cudaEvent_t start,stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-
-    cudaEventRecord(start);
-    kernelClobbered<<<grid, threads>>>(sets_clobbered_cuda, columns, cuda_contacts, cuda_slopes, cuda_yIntersects);
-//    cudaDeviceSynchronize();
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    cudaError_t err=cudaGetLastError();
-    if (err!=cudaSuccess)
     {
-        printf("An Error occured in clobbered kernel: %s (%i)\n",cudaGetErrorString(err),err);
-        return(-1);
-    }
-    float kernelClobbered_time;
-    cudaEventElapsedTime(&kernelClobbered_time, start, stop);
-
-    cudaFree(sets_clobbered_cuda);
-    sets_clobbered_cuda = nullptr;
-    
-    
-    vector<my_size_t> contactResults(columns);
-    vector<real_t> slopesResults(columns);
-    vector<real_t> yIntsctResults(columns);
-    
-    // write results back to host mem
-    cudaMemcpy(contactResults.data(), cuda_contacts, sizeof(*cuda_contacts) * columns, cudaMemcpyDeviceToHost);
-    cudaMemcpy(slopesResults.data(), cuda_slopes, sizeof(*cuda_slopes) * columns, cudaMemcpyDeviceToHost);
-    cudaMemcpy(yIntsctResults.data(), cuda_yIntersects, sizeof(*cuda_yIntersects) * columns, cudaMemcpyDeviceToHost);
-    
-    duration<double, std::milli> cpuClobbered_time, cpuSoa_time;
-    {
-    auto t1 = high_resolution_clock::now();
-    checkResultsClobbered(sets_clobbered, contactResults.data(), slopesResults.data(), yIntsctResults.data(), columns);
-    auto t2 = high_resolution_clock::now();
-    cpuClobbered_time = t2 - t1;
-    }
-    
-    /*** alternative attempt with pure SoA***/
-    
-    point_alt_t* soaPointsCuda = nullptr;
-    vector<point_alt_t> soaPoints; // array of soa structs holding the data points for each thread
-    
-    vector<my_size_t> pointsPerSet(columns); // no. of points each thread processes
-    for(my_size_t i=0; i<columns; i++)
-    {
-        pointsPerSet[i] = ACCESS(sets_clobbered.data(), i, columns, 0).n;
-    }
-    my_size_t* pointsPerSetCuda = nullptr;
-    if(cudaMalloc(&pointsPerSetCuda, sizeof(*pointsPerSetCuda) * columns) != cudaSuccess) goto fail3;
-    cudaMemcpy(pointsPerSetCuda, pointsPerSet.data(), sizeof(*pointsPerSetCuda) * columns, cudaMemcpyHostToDevice);
-
-    rows--; // first row of sets_clobbered containing sizes, just read them
-    rows--; // here are the x,y positions stored, which we ignore for now
-
-    // prepare datapoints for usage on CPU
-    soaPoints.resize(rows);
-    if(cudaMalloc(&soaPointsCuda, sizeof(*soaPointsCuda) * rows) != cudaSuccess) goto fail2;
-    for(my_size_t i=0; i<rows; i++)
-    {
-        // alloc temp host mem to store to datapoints to
-        soaPoints[i].z = new (nothrow) real_t[columns];
-        soaPoints[i].force = new (nothrow) real_t[columns];
-        
-        if(soaPoints[i].force == nullptr || soaPoints[i].z == nullptr)
+        vector<point_t> set_extended(realcolumns*10*realrows);
+        for(my_size_t row=0; row<realrows; row++)
         {
-            delete [] soaPoints[i].force;
+            for(int k=0;k<10;k++)
+            {
+                memcpy(set_extended.data()+realcolumns*10*row+realcolumns*k, &ACCESS(sets_clobbered.data(), 0, realcolumns, row), sizeof(point_t)*realcolumns);
+            }
+        }
+        std::swap(set_extended, sets_clobbered);
+    }
+    
+    for(my_size_t columns=1024; columns<=realcolumns*10; columns<<=1)
+    {
+        my_size_t rows=realrows;
+        
+        const dim3 threads(1024);
+        const dim3 grid(columns/threads.x);
+        
+        point_t* sets_clobbered_cuda = nullptr;
+        my_size_t* cuda_contacts = nullptr;
+        real_t* cuda_slopes = nullptr;
+        real_t* cuda_yIntersects = nullptr;    
+        if(cudaMalloc(&sets_clobbered_cuda, sizeof(*sets_clobbered_cuda) * columns*rows) != cudaSuccess) return -1;
+        cudaMemcpy(sets_clobbered_cuda, sets_clobbered.data(), sizeof(*sets_clobbered_cuda) * columns*rows, cudaMemcpyHostToDevice);
+        
+        if(cudaMalloc(&cuda_contacts, sizeof(*cuda_contacts) * columns) != cudaSuccess) return -1;
+        if(cudaMalloc(&cuda_slopes, sizeof(*cuda_slopes) * columns) != cudaSuccess) return -1;
+        if(cudaMalloc(&cuda_yIntersects, sizeof(*cuda_yIntersects) * columns) != cudaSuccess) return -1;
+    
+        
+        cudaEvent_t start,stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
+
+        cudaEventRecord(start);
+        kernelClobbered<<<grid, threads>>>(sets_clobbered_cuda, columns, cuda_contacts, cuda_slopes, cuda_yIntersects);
+    //    cudaDeviceSynchronize();
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        cudaError_t err=cudaGetLastError();
+        if (err!=cudaSuccess)
+        {
+            printf("An Error occured in clobbered kernel: %s (%i)\n",cudaGetErrorString(err),err);
+            return(-1);
+        }
+        float kernelClobbered_time;
+        cudaEventElapsedTime(&kernelClobbered_time, start, stop);
+
+        cudaFree(sets_clobbered_cuda);
+        sets_clobbered_cuda = nullptr;
+        
+        
+        vector<my_size_t> contactResults(columns);
+        vector<real_t> slopesResults(columns);
+        vector<real_t> yIntsctResults(columns);
+        
+        // write results back to host mem
+        cudaMemcpy(contactResults.data(), cuda_contacts, sizeof(*cuda_contacts) * columns, cudaMemcpyDeviceToHost);
+        cudaMemcpy(slopesResults.data(), cuda_slopes, sizeof(*cuda_slopes) * columns, cudaMemcpyDeviceToHost);
+        cudaMemcpy(yIntsctResults.data(), cuda_yIntersects, sizeof(*cuda_yIntersects) * columns, cudaMemcpyDeviceToHost);
+        
+        duration<double, std::milli> cpuClobbered_time, cpuSoa_time;
+        {
+        auto t1 = high_resolution_clock::now();
+        checkResultsClobbered(sets_clobbered, contactResults.data(), slopesResults.data(), yIntsctResults.data(), columns);
+        auto t2 = high_resolution_clock::now();
+        cpuClobbered_time = t2 - t1;
+        }
+        
+        /*** alternative attempt with pure SoA***/
+        
+        point_alt_t* soaPointsCuda = nullptr;
+        vector<point_alt_t> soaPoints; // array of soa structs holding the data points for each thread
+        
+        vector<my_size_t> pointsPerSet(columns); // no. of points each thread processes
+        for(my_size_t i=0; i<columns; i++)
+        {
+            pointsPerSet[i] = ACCESS(sets_clobbered.data(), i, columns, 0).n;
+        }
+        my_size_t* pointsPerSetCuda = nullptr;
+        if(cudaMalloc(&pointsPerSetCuda, sizeof(*pointsPerSetCuda) * columns) != cudaSuccess) goto fail3;
+        cudaMemcpy(pointsPerSetCuda, pointsPerSet.data(), sizeof(*pointsPerSetCuda) * columns, cudaMemcpyHostToDevice);
+
+        rows--; // first row of sets_clobbered containing sizes, just read them
+        rows--; // here are the x,y positions stored, which we ignore for now
+
+        // prepare datapoints for usage on CPU
+        soaPoints.resize(rows);
+        if(cudaMalloc(&soaPointsCuda, sizeof(*soaPointsCuda) * rows) != cudaSuccess) goto fail2;
+        for(my_size_t i=0; i<rows; i++)
+        {
+            // alloc temp host mem to store to datapoints to
+            soaPoints[i].z = new (nothrow) real_t[columns];
+            soaPoints[i].force = new (nothrow) real_t[columns];
+            
+            if(soaPoints[i].force == nullptr || soaPoints[i].z == nullptr)
+            {
+                delete [] soaPoints[i].force;
+                delete [] soaPoints[i].z;
+                soaPoints[i].z = nullptr;
+                soaPoints[i].force = nullptr;
+                goto fail;
+            }
+
+            // store the data points for each set
+            for(my_size_t j=0; j<columns; j++)
+            {
+                point_t tmp = ACCESS(sets_clobbered.data(), j, columns, i+2);
+                soaPoints[i].z[j] = tmp.z;
+                soaPoints[i].force[j] = tmp.force;
+            }
+        }
+
+        {
+        auto t1 = high_resolution_clock::now();
+        calcCpuSoa(pointsPerSet.data(), soaPoints.data(), columns);
+        auto t2 = high_resolution_clock::now();
+        cpuSoa_time = t2 - t1;
+        }
+        
+        for(my_size_t i=0; i<rows; i++)
+        {
+            // alloc device mem for data points
+            real_t* tmpCudaZ = nullptr;
+            real_t* tmpCudaForce = nullptr;
+            if(cudaMalloc(&tmpCudaZ, sizeof(real_t) * columns) != cudaSuccess) goto fail;
+            if(cudaMalloc(&tmpCudaForce, sizeof(real_t) * columns) != cudaSuccess)
+            {
+                cudaFree(tmpCudaZ);
+                delete [] soaPoints[i].force;
+                delete [] soaPoints[i].z;
+                soaPoints[i].z = nullptr;
+                soaPoints[i].force = nullptr;
+                goto fail;
+            }
+            
+            // copy the datapoints from temp host mem to dev mem
+            cudaMemcpy(tmpCudaZ, soaPoints[i].z, sizeof(real_t) * columns, cudaMemcpyHostToDevice);
+            cudaMemcpy(tmpCudaForce, soaPoints[i].force, sizeof(real_t) * columns, cudaMemcpyHostToDevice);
+            
+            // free host mem, make pointers point to dev mem array
             delete [] soaPoints[i].z;
-            soaPoints[i].z = nullptr;
-            soaPoints[i].force = nullptr;
-            goto fail;
-        }
-
-        // store the data points for each set
-        for(my_size_t j=0; j<columns; j++)
-        {
-            point_t tmp = ACCESS(sets_clobbered.data(), j, columns, i+2);
-            soaPoints[i].z[j] = tmp.z;
-            soaPoints[i].force[j] = tmp.force;
-        }
-    }
-
-    {
-    auto t1 = high_resolution_clock::now();
-    calcCpuSoa(pointsPerSet.data(), soaPoints.data(), columns);
-    auto t2 = high_resolution_clock::now();
-    cpuSoa_time = t2 - t1;
-    }
-    
-    for(my_size_t i=0; i<rows; i++)
-    {
-        // alloc device mem for data points
-        real_t* tmpCudaZ = nullptr;
-        real_t* tmpCudaForce = nullptr;
-        if(cudaMalloc(&tmpCudaZ, sizeof(real_t) * columns) != cudaSuccess) goto fail;
-        if(cudaMalloc(&tmpCudaForce, sizeof(real_t) * columns) != cudaSuccess)
-        {
-            cudaFree(tmpCudaZ);
+            soaPoints[i].z = tmpCudaZ;
             delete [] soaPoints[i].force;
-            delete [] soaPoints[i].z;
-            soaPoints[i].z = nullptr;
-            soaPoints[i].force = nullptr;
-            goto fail;
+            soaPoints[i].force = tmpCudaForce;
+        }
+        cudaMemcpy(soaPointsCuda, soaPoints.data(), sizeof(*soaPointsCuda) * rows, cudaMemcpyHostToDevice);
+        
+        cudaEventRecord(start);
+        kernelSoa<<<grid, threads>>>(pointsPerSetCuda, soaPointsCuda, columns, cuda_contacts, cuda_slopes, cuda_yIntersects);
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+    //    cudaDeviceSynchronize();
+        err=cudaGetLastError();
+        if (err!=cudaSuccess)
+        {
+            printf("An Error occured in soa kernel: %s (%i)\n",cudaGetErrorString(err),err);
+            return(-1);
+        }
+        float kernelSoa_time;
+        cudaEventElapsedTime(&kernelSoa_time, start, stop);
+        
+        
+        {
+        vector<my_size_t> contactResultsSoa(columns);
+        vector<real_t> slopesResultsSoa(columns);
+        vector<real_t> yIntsctResultsSoa(columns);
+        
+        // write results back to host mem
+        cudaMemcpy(contactResultsSoa.data(), cuda_contacts, sizeof(*cuda_contacts) * columns, cudaMemcpyDeviceToHost);
+        cudaMemcpy(slopesResultsSoa.data(), cuda_slopes, sizeof(*cuda_slopes) * columns, cudaMemcpyDeviceToHost);
+        cudaMemcpy(yIntsctResultsSoa.data(), cuda_yIntersects, sizeof(*cuda_yIntersects) * columns, cudaMemcpyDeviceToHost);
+        
+        // assert that the results of soa kernel and clobbered kernel are same
+        checkResultsSoa(contactResultsSoa.data(), slopesResultsSoa.data(), yIntsctResultsSoa.data(), contactResults.data(), slopesResults.data(), yIntsctResults.data(), columns);
+        
         }
         
-        // copy the datapoints from temp host mem to dev mem
-        cudaMemcpy(tmpCudaZ, soaPoints[i].z, sizeof(real_t) * columns, cudaMemcpyHostToDevice);
-        cudaMemcpy(tmpCudaForce, soaPoints[i].force, sizeof(real_t) * columns, cudaMemcpyHostToDevice);
+        cout << "\n\ndatensaetze: " << columns;
+        cout << "\ngpu timing in ms:\n" << "  kernelClobbered: " << kernelClobbered_time << "\n  kernelSoa: " << kernelSoa_time << endl;
+        cout << "\ncpu timing in ms:\n" << "  cpuClobbered: " << cpuClobbered_time.count() << "\n  cpuSoa: " << cpuSoa_time.count() << endl;
         
-        // free host mem, make pointers point to dev mem array
-        delete [] soaPoints[i].z;
-        soaPoints[i].z = tmpCudaZ;
-        delete [] soaPoints[i].force;
-        soaPoints[i].force = tmpCudaForce;
+    fail:
+        for(my_size_t i=0; i<rows; i++)
+        {
+            cudaFree(soaPoints[i].z);
+            cudaFree(soaPoints[i].force);
+        }
+        cudaFree(soaPointsCuda);
+        
+    fail2:
+        cudaFree(pointsPerSetCuda);
+        cudaFree(cuda_contacts);
+        cudaFree(cuda_slopes);
+        cudaFree(cuda_yIntersects);
+        
+    fail3:
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);
+        
     }
-    cudaMemcpy(soaPointsCuda, soaPoints.data(), sizeof(*soaPointsCuda) * rows, cudaMemcpyHostToDevice);
-    
-    cudaEventRecord(start);
-    kernelSoa<<<grid, threads>>>(pointsPerSetCuda, soaPointsCuda, columns, cuda_contacts, cuda_slopes, cuda_yIntersects);
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-//    cudaDeviceSynchronize();
-    err=cudaGetLastError();
-    if (err!=cudaSuccess)
-    {
-        printf("An Error occured in soa kernel: %s (%i)\n",cudaGetErrorString(err),err);
-        return(-1);
-    }
-    float kernelSoa_time;
-    cudaEventElapsedTime(&kernelSoa_time, start, stop);
-    
-    
-    {
-    vector<my_size_t> contactResultsSoa(columns);
-    vector<real_t> slopesResultsSoa(columns);
-    vector<real_t> yIntsctResultsSoa(columns);
-    
-    // write results back to host mem
-    cudaMemcpy(contactResultsSoa.data(), cuda_contacts, sizeof(*cuda_contacts) * columns, cudaMemcpyDeviceToHost);
-    cudaMemcpy(slopesResultsSoa.data(), cuda_slopes, sizeof(*cuda_slopes) * columns, cudaMemcpyDeviceToHost);
-    cudaMemcpy(yIntsctResultsSoa.data(), cuda_yIntersects, sizeof(*cuda_yIntersects) * columns, cudaMemcpyDeviceToHost);
-    
-    // assert that the results of soa kernel and clobbered kernel are same
-    checkResultsSoa(contactResultsSoa.data(), slopesResultsSoa.data(), yIntsctResultsSoa.data(), contactResults.data(), slopesResults.data(), yIntsctResults.data(), columns);
-    
-    }
-    
-    cout << "gpu timing in ms:\n" << "  kernelClobbered: " << kernelClobbered_time << "\n  kernelSoa: " << kernelSoa_time << endl;
-    cout << "cpu timing in ms:\n" << "  cpuClobbered: " << cpuClobbered_time.count() << "\n  cpuSoa: " << cpuSoa_time.count() << endl;
-    
-fail:
-    for(my_size_t i=0; i<rows; i++)
-    {
-        cudaFree(soaPoints[i].z);
-        cudaFree(soaPoints[i].force);
-    }
-    cudaFree(soaPointsCuda);
-    
-fail2:
-    cudaFree(pointsPerSetCuda);
-    cudaFree(cuda_contacts);
-    cudaFree(cuda_slopes);
-    cudaFree(cuda_yIntersects);
-    
-fail3:
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
 }
