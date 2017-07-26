@@ -70,7 +70,7 @@ Die Datensätze liegen als Textdeateien vor, wobei an jede Messposition in einer
 Das Einlesen dieser vielen 100KiB kleinen Dateien wird durch das häufige öffnen und schließen der Dateien und dem damit verbundenen Overhead seitens des Betreibssystems verlangsamt. Zudem werden für die nötigen Berechnungen nur die ersten zwei der insgesamt 14 Datenspalten benötigt, was Caching seitens des OS zusätzlich erschwert.
 
 
-Das Einlesen aller 65536 Textdateien benötigt auf einer SSD 2 Minuten. Dies kann auf 40 Sekunden reduziert werden, wenn das Einlesen mittels openMP Tasks parallelisiert erfolgt.
+Das Einlesen aller 65536 Textdateien benötigt auf einer SSD\footnote{Testsystem: openSUSE 13.2, Linux Kernel 3.16.7 x86\_64, OCZ Vertex 3} 2 Minuten. Dies kann auf 40 Sekunden reduziert werden, wenn das Einlesen mittels openMP Tasks parallelisiert erfolgt.
 Der Einlesevorgang auf einer konventionellen HDD benötigt aufgrund der trägen Mechanik hingegen mind. 10 Minuten.
 
 Um dies zu umgehen ist eine Vorverarbeitung nötig, die darin besteht, die Textdateien einmalig einzulesen, die Daten zu filtern und zu sortieren und sie anschließend als Binär Blob auszugeben. Der Einlesevorgang kann somit auf wenige Sekunden reduziert werden.
@@ -79,7 +79,7 @@ Um dies zu umgehen ist eine Vorverarbeitung nötig, die darin besteht, die Textd
 Als Eingabe erhält der Kernel die aus dem Binär Blob gelesenen Datensätze.
 Der Kernel hat die Aufgabe die Eingangs beschriebene dreifache lineare Regression für jeden Datensatz durchzuführen.
 
-\begin{lstlisting}
+\begin{lstlisting}[caption=Implementierung des Kernel in Pseudocode,label=kernel]
 void kernel(const point_t* pts, const int nSets)
 {
     int myAddr = threadIdx.x+blockIdx.x*blockDim.x;
@@ -103,7 +103,7 @@ void kernel(const point_t* pts, const int nSets)
 \end{lstlisting}
 
 
-Aufgrund der vergleichsweise geringen Anzahl an Messwerten pro Datensätze (=300) erfolgt eine naive Parallelisierung der Datensätze: Jeder Thread der Grafikkarte bearbeitet einen Datensatz. Wie in Codelisting \ref{dings} dargestellt wird hierfür
+Aufgrund der vergleichsweise geringen Anzahl an Messwerten pro Datensätze (=300) erfolgt eine naive Parallelisierung der Datensätze: Jeder Thread der Grafikkarte bearbeitet einen Datensatz. Wie in Codelisting \ref{kernel} dargestellt wird hierfür
 
 \begin{itemize}
 \item die gegebene Punktwolke abgeleitet, um den Kontaktpunkt zu bestimmen (Zeile ??),
@@ -117,10 +117,10 @@ Grafikkarten arbeiten im SIMD Verfahren. Um zu verhindern, dass die Threads dive
 Diese konnten in der Praxis jedoch keine messbare Veränderung der Laufzeit hervorbringen, da bei nur 300 Messwerten pro Datensatz eine mögliche Divergenz der GPU-Threads zu gering ist.
 
 \section{Datenmodell}
-Um eine effiziente Verarbeitung auf der Grafikkarte zu erreichen, muessen die Datensaetze in geeigneter Weise strukturiert werden.
-Dazu muss entschieden werden, ob sie Daten als \gls{aos} oder als \gls{soa} uebergeben werden. Nachfolgend werden diese Ansaetze diskutiert.
+Um eine effiziente Verarbeitung auf der Grafikkarte zu erreichen, müssen die Datensätze in geeigneter Weise strukturiert werden.
+Dazu muss entschieden werden, ob sie Daten als \gls{aos} oder als \gls{soa} übergeben werden. Nachfolgend werden diese Ansätze diskutiert.
 
-\paragraph{\gls{aos}}
+\subsection{\acrlong{aos}}
 \begin{lstlisting}
 struct tuple_t { float z,f; };
 tuple_t datasets[M][N];
@@ -131,7 +131,7 @@ M: anzahl an messwerten pro datensatz
 
 Die Auslegung der Daten als \gls{aos} bedeutet, dass die Daten als zweidimensionales Array uebergeben werden, deren Element ein Verbunddatentyp ist, welcher die gemessenene Kraft f an der entsprechenden Messhoehe z enthaelt. Wird das Array wie in Listing \ref{dings} dargestellt row major im Speicher abgelegt, enthaelt also die i-te Speicherzeile die N Messwerte des i-ten Datensatzes.
 Die ist jedoch für Grafikkarten ungeeignet, da die Messwerte für die einzelnen Threads zu weit auseinander liegen. D.h. wird eine Cachline geladen, kann hiervon nur das erste Element (der erste Messwert) verwendet werden. Die anderen Threads benoetigen ebenfalls den ersten Messwert allerdings den des ihnen zugeordneten Datensatzes. Diese befinden sich in anderen Zeilen des Speichers.
-Es muessen somit weitere Cachlines geladen werden, was schlimmsten falls zu einer Ausserialisierung der Threads fuehrt.
+Es muessen somit weitere Cachlines geladen werden, was schlimmsten falls zu einer Ausserialisierung der Threads führt.
 
 
 \begin{lstlisting}
@@ -139,14 +139,14 @@ struct tuple_t { float z,f; };
 tuple_t datasets[N][M];
 \end{lstlisting}
 
-Es empfiehlt sich daher die Datensaetze column major im Speicher abzulegen, wie in Listing \ref{dings} dargestellt. Die i-te Zeile des Speichers enthaelt somit die i-ten Messwerte aller Datensaetze. Da jeder Thread einen Datensatz bearbeitet, koennen alle 32 Threads eines Warps durch eine Cacheline mit Daten versorgt werden.
+Es empfiehlt sich daher die Datensätze column major im Speicher abzulegen, wie in Listing \ref{dings} dargestellt. Die i-te Zeile des Speichers enthält somit die i-ten Messwerte aller Datensätze. Da jeder Thread einen Datensatz bearbeitet, können alle 32 Threads eines Warps durch eine Cacheline mit Daten versorgt werden.
 
 
-\paragraph{\gls{soa}}
-Bei NVidia Grafikkarten vor der Pascal Architektur erhält jeder Thread durch einen Lesevorgang ein 32 bit Wort aus der Cacheline\footnote{http://docs.nvidia.com/cuda/pascal-tuning-guide/index.html#shared-memory-bandwidth}. tuple\_t hat jedoch eine Größe von 8 Bytes. 
+\subsection{\acrlong{soa}}
+Bei NVidia Grafikkarten vor der Pascal Architektur erhält jeder Thread durch einen Lesevorgang ein 32 bit Wort aus der Cacheline\footnote{\href{http://docs.nvidia.com/cuda/pascal-tuning-guide/index.html\#shared-memory-bandwidth}{http://docs.nvidia.com/cuda/pascal-tuning-guide/index.html\#shared-memory-bandwidth}}. tuple\_t hat jedoch eine Größe von 8 Bytes. 
 Es braucht also zwei Lesevorgänge um alle Threads eines Warps mit Daten zu versorgen.
-Um einen Performanceverlgeich zu der aelteren Kepler Architektur zu erhalten, wird daher auch eine \gls{soa} Variante, wie in Listing \ref{dings} dargestellt, implementiert.
-daher folgende optimierung:
+Um einen Performancevergleich zu der älteren Kepler Architektur zu erhalten, wird daher auch eine \gls{soa} Variante, wie in Listing \ref{dings} dargestellt, implementiert.
+daher folgende Optimierung:
 
 \begin{lstlisting}
 struct tuple_t { float z[N],f[N]; };
@@ -154,7 +154,7 @@ tuple_t datasets[M];
 \end{lstlisting}
 
 Hier ist tuple\_t ein reines \gls{soa}, welches M mal existiert und jeweils Zeiger auf Arrays enthält, welche die N Messwerte z und f des jeweiligen Datensatzes enthalten. Diese können somit von N Threads single strided bearbeitet werden, wie schematisch in Listing \ref{dings} dargestellt.
-Zwar hat tuple\_t nun eine Groesse von 16 Byte, da es zwei 8 Byte Zeiger enthaelt. Dieses Element muss jedoch nur einmalig gelesen werden, da die enthaltenen Zeiger von den N Threads gemeinsam verwendet werden koennen.
+Zwar hat tuple\_t nun eine Größe von 16 Byte, da es zwei 8 Byte Zeiger enthält. Dieses Element muss jedoch nur einmalig gelesen werden, da die enthaltenen Zeiger von den N Threads gemeinsam verwendet werden können.
 
 \begin{lstlisting}
 tuple_t datasets[M];
@@ -171,15 +171,15 @@ for (i=0; i<M; i++)
 
 
 \chapter{benchmarking}
-\section{lesen der textdateien}
-von konventioneller HDD: 8MiB/s
-von SSD:  35 MiB/s -O0
-70 MiB/s -O2
-41 s bei 190 MiB/s -O2 paralleles lesen mit openmp tasks
-
-referenz implementierung 11 MiB/s von SSD
-
-referenz implementierung 11 minuten insgesamt
+%\section{lesen der textdateien}
+%von konventioneller HDD: 8MiB/s
+%von SSD:  35 MiB/s -O0
+%70 MiB/s -O2
+%41 s bei 190 MiB/s -O2 paralleles lesen mit openmp tasks
+%
+%referenz implementierung 11 MiB/s von SSD
+%
+%referenz implementierung 11 minuten insgesamt
 
 
 \section{berechnung}

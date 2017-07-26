@@ -114,16 +114,16 @@
 {UC--\ref{#1}}
 
 % nomain, if you define glossaries in a file, and you use \include{INP-00-glossary}
-%\usepackage[
-%nonumberlist, %keine Seitenzahlen anzeigen
-%acronym,      %ein Abkürzungsverzeichnis erstellen
-%nopostdot,
-%toc]          %Einträge im Inhaltsverzeichnis
-%%section      %im Inhaltsverzeichnis auf section-Ebene erscheinen
-%{glossaries}
+\usepackage[
+nonumberlist, %keine Seitenzahlen anzeigen
+acronym,      %ein Abkürzungsverzeichnis erstellen
+nopostdot,
+toc]          %Einträge im Inhaltsverzeichnis
+%section      %im Inhaltsverzeichnis auf section-Ebene erscheinen
+{glossaries}
 
-%\makeglossaries
-%\input{glossary}
+\makeglossaries
+\input{glossary}
 
 
 \definecolor{mygreen}{rgb}{0,0.6,0}
@@ -241,13 +241,13 @@
 \lstlistoflistings
 \addcontentsline{toc}{chapter}{Listings}
 
-%%glossar ausgeben auch wenn nicht im text referriert
-%\glsaddall
-%%Glossar ausgeben
-%\printglossary[title=Glossar, style=altlist]
-%
-%%Abkürzungen ausgeben
-%\printglossary[type=\acronymtype,style=long,title=Abkürzungsverzeichnis]
+%glossar ausgeben auch wenn nicht im text referriert
+\glsaddall
+%Glossar ausgeben
+\printglossary[title=Glossar, style=altlist]
+
+%Abkürzungen ausgeben
+\printglossary[type=\acronymtype,style=long,title=Abkürzungsverzeichnis]
 
 % Anhang
 \appendix
