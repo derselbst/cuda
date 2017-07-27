@@ -95,9 +95,9 @@ void kernel(const point_t* pts, const int nSets)
         __syncthreads();
                 
         my_size_t splitIdx = contactIdx+10;
-        fitPoints(pts[contactIdx:splitIdx+1]);
+        fitPoints(pts[contactIdx:splitIdx]);
 
-        fitPoints(pts[splitIdx: nPoints-splitIdx]);
+        fitPoints(pts[splitIdx:nPoints]);
     }
 }
 \end{lstlisting}
@@ -106,14 +106,14 @@ void kernel(const point_t* pts, const int nSets)
 Aufgrund der vergleichsweise geringen Anzahl an Messwerten pro Datensätze (=300) erfolgt eine naive Parallelisierung der Datensätze: Jeder Thread der Grafikkarte bearbeitet einen Datensatz. Wie in Codelisting \ref{kernel} dargestellt wird hierfür
 
 \begin{itemize}
-\item die gegebene Punktwolke abgeleitet, um den Kontaktpunkt zu bestimmen (Zeile ??),
-\item eine lineare Regression (polyfit) der Kurve vom Ende der Messung bis zum Kontakt mit dem Medium durchgeführt (Zeile ??),
-\item der Split-Index erraten\footnote{Die Berechnung des Split-Indexes erwies sich als zu aufwendig und instabil, daher wurde auf eine Implementierung im Rahmen dieses Seminars verzichtet.} (Zeile ??),
-\item ein polyfit der Kurve zwischen dem Kontaktpunkt bis Split-Index  (Zeile ??) und
-\item ein polyfit der Kurve zwischen Split-Index und Anfang der Messung durchgeführt  (Zeile ??).
+\item die gegebene Punktwolke abgeleitet, um den Kontaktpunkt zu bestimmen (Zeile 7),
+\item eine lineare Regression (polyfit) der Kurve vom Ende der Messung bis zum Kontakt mit dem Medium durchgeführt (Zeile 12),
+\item der Split-Index erraten\footnote{Die Berechnung des Split-Indexes erwies sich als zu aufwendig und instabil, daher wurde auf eine Implementierung im Rahmen dieses Seminars verzichtet.} (Zeile 15),
+\item ein polyfit der Kurve zwischen dem Kontaktpunkt bis Split-Index  (Zeile 16) und
+\item ein polyfit der Kurve zwischen Split-Index und Anfang der Messung durchgeführt  (Zeile 18).
 \end{itemize}
 
-Grafikkarten arbeiten im SIMD Verfahren. Um zu verhindern, dass die Threads divergieren, da sich die Kontaktpunkte und die Länge der zu interpolierenden Kurve zwangsläufig zwischen den Datensätzen unterscheiden, wurde in den Zeilen ?? eine Synchronisationsbarrieren auf Thread-Block Ebene eingeführt.
+Grafikkarten arbeiten im SIMD Verfahren. Um zu verhindern, dass die Threads divergieren, da sich die Kontaktpunkte und die Länge der zu interpolierenden Kurve zwangsläufig zwischen den Datensätzen unterscheiden, wurde in den Zeilen 10 und 13 Synchronisationsbarrieren auf Thread-Block Ebene eingeführt.
 Diese konnten in der Praxis jedoch keine messbare Veränderung der Laufzeit hervorbringen, da bei nur 300 Messwerten pro Datensatz eine mögliche Divergenz der GPU-Threads zu gering ist.
 
 \section{Datenmodell}
@@ -121,7 +121,7 @@ Um eine effiziente Verarbeitung auf der Grafikkarte zu erreichen, müssen die Da
 Dazu muss entschieden werden, ob sie Daten als \gls{aos} oder als \gls{soa} übergeben werden. Nachfolgend werden diese Ansätze diskutiert.
 
 \subsection{\acrlong{aos}}
-\begin{lstlisting}
+\begin{lstlisting}[label=aos_row,caption=\gls{aos} row major]
 struct tuple_t { float z,f; };
 tuple_t datasets[M][N];
 \end{lstlisting}
@@ -129,34 +129,34 @@ tuple_t datasets[M][N];
 N: anzahl an datensätze
 M: anzahl an messwerten pro datensatz
 
-Die Auslegung der Daten als \gls{aos} bedeutet, dass die Daten als zweidimensionales Array uebergeben werden, deren Element ein Verbunddatentyp ist, welcher die gemessenene Kraft f an der entsprechenden Messhoehe z enthaelt. Wird das Array wie in Listing \ref{dings} dargestellt row major im Speicher abgelegt, enthaelt also die i-te Speicherzeile die N Messwerte des i-ten Datensatzes.
-Die ist jedoch für Grafikkarten ungeeignet, da die Messwerte für die einzelnen Threads zu weit auseinander liegen. D.h. wird eine Cachline geladen, kann hiervon nur das erste Element (der erste Messwert) verwendet werden. Die anderen Threads benoetigen ebenfalls den ersten Messwert allerdings den des ihnen zugeordneten Datensatzes. Diese befinden sich in anderen Zeilen des Speichers.
-Es muessen somit weitere Cachlines geladen werden, was schlimmsten falls zu einer Ausserialisierung der Threads führt.
+Die Auslegung der Daten als \gls{aos} bedeutet, dass die Daten als zweidimensionales Array uebergeben werden, deren Element ein Verbunddatentyp ist, welcher die gemessene Kraft f an der entsprechenden Messhöhe z enthält. Wird das Array wie in Listing \ref{aos_row} dargestellt row major im Speicher abgelegt, enthält also die i-te Speicherzeile die N Messwerte des i-ten Datensatzes.
+Die ist jedoch für Grafikkarten ungeeignet, da die Messwerte für die einzelnen Threads zu weit auseinander liegen. D.h. wird eine Cachline geladen, kann hiervon nur das erste Element (der erste Messwert) verwendet werden. Die anderen Threads benötigen ebenfalls den ersten Messwert allerdings den des ihnen zugeordneten Datensatzes. Diese befinden sich in anderen Zeilen des Speichers.
+Es müssen somit weitere Cachlines geladen werden, was schlimmsten falls zu einer Ausserialisierung der Threads führt.
 
 
-\begin{lstlisting}
+\begin{lstlisting}[label=aos_col,caption=\gls{aos} column major]
 struct tuple_t { float z,f; };
 tuple_t datasets[N][M];
 \end{lstlisting}
 
-Es empfiehlt sich daher die Datensätze column major im Speicher abzulegen, wie in Listing \ref{dings} dargestellt. Die i-te Zeile des Speichers enthält somit die i-ten Messwerte aller Datensätze. Da jeder Thread einen Datensatz bearbeitet, können alle 32 Threads eines Warps durch eine Cacheline mit Daten versorgt werden.
+Es empfiehlt sich daher die Datensätze column major im Speicher abzulegen, wie in Listing \ref{aos_col} dargestellt. Die i-te Zeile des Speichers enthält somit die i-ten Messwerte aller Datensätze. Da jeder Thread einen Datensatz bearbeitet, können alle 32 Threads eines Warps durch eine Cacheline mit Daten versorgt werden.
 
 
 \subsection{\acrlong{soa}}
 Bei NVidia Grafikkarten vor der Pascal Architektur erhält jeder Thread durch einen Lesevorgang ein 32 bit Wort aus der Cacheline\footnote{\href{http://docs.nvidia.com/cuda/pascal-tuning-guide/index.html\#shared-memory-bandwidth}{http://docs.nvidia.com/cuda/pascal-tuning-guide/index.html\#shared-memory-bandwidth}}. tuple\_t hat jedoch eine Größe von 8 Bytes. 
 Es braucht also zwei Lesevorgänge um alle Threads eines Warps mit Daten zu versorgen.
-Um einen Performancevergleich zu der älteren Kepler Architektur zu erhalten, wird daher auch eine \gls{soa} Variante, wie in Listing \ref{dings} dargestellt, implementiert.
+Um einen Performancevergleich zu der älteren Kepler Architektur zu erhalten, wird daher auch eine \gls{soa} Variante, wie in Listing \ref{soa} dargestellt, implementiert.
 daher folgende Optimierung:
 
-\begin{lstlisting}
+\begin{lstlisting}[label=soa,caption=\gls{soa}]
 struct tuple_t { float z[N],f[N]; };
 tuple_t datasets[M];
 \end{lstlisting}
 
-Hier ist tuple\_t ein reines \gls{soa}, welches M mal existiert und jeweils Zeiger auf Arrays enthält, welche die N Messwerte z und f des jeweiligen Datensatzes enthalten. Diese können somit von N Threads single strided bearbeitet werden, wie schematisch in Listing \ref{dings} dargestellt.
+Hier ist tuple\_t ein reines \gls{soa}, welches M mal existiert und jeweils Zeiger auf Arrays enthält, welche die N Messwerte z und f des jeweiligen Datensatzes enthalten. Diese können somit von N Threads single strided bearbeitet werden, wie schematisch in Listing \ref{soa_beispiel} dargestellt.
 Zwar hat tuple\_t nun eine Größe von 16 Byte, da es zwei 8 Byte Zeiger enthält. Dieses Element muss jedoch nur einmalig gelesen werden, da die enthaltenen Zeiger von den N Threads gemeinsam verwendet werden können.
 
-\begin{lstlisting}
+\begin{lstlisting}[label=soa_beispiel,caption=Bearbeitung eines \gls{soa}]
 tuple_t datasets[M];
 extern int threadId;
 
