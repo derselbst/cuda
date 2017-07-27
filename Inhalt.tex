@@ -191,4 +191,30 @@ benchmarking mit double? verdoppelt zeit da wir genug double precision units hab
 
 \section{CPU vs. GPU}
 
+\begin{figure}[h!]
+\centering
+ \begin{tikzpicture}[scale=1]
+ \begin{axis}[
+   width=15cm,
+   legend style={at={(0,1)},anchor=north west},
+   /pgf/number format/.cd,
+   use comma,
+   1000 sep={},
+   xlabel=Anzahl Datensätze,xmode = log,log basis x={2},
+   ylabel=Berechnungszeit in ms]
+ \addplot table [x=N,y=Kaos]{test};
+  \addplot table [x=N,y=Ksoa]{test};
+   \addplot table [x=N,y=Caos]{test};
+    \addplot table [x=N,y=Csoa]{test};
+    \legend{GPU Kernel AoS,GPU Kernel SoA,CPU AoS, CPU SoA}
+    
+ %\addlegendentry{$Q_A$ series}
+ \end{axis}
+ \end{tikzpicture}
+\caption{Ausschnitt einer Kraft-Abstandskurve}
+\label{fig:kraftbsp}
+\end{figure}
+
+Während die Berechnung von $2^{20}$ Datensätzen auf der GPU nicht länger als 27 ms benötigt, steigt die Bearbeitungszeit auf der entsprechend mit der Problemgröße exponentiell an.
+
 diagramm bei variierender anz datensätze auf cpu und gpu

@@ -58,7 +58,7 @@ __global__ void kernelClobbered(const point_t* pts, const my_size_t nSets, my_si
 //             fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+(contactIdx+1)), (splitIdx-contactIdx), myAddr, nSets, slope, yIntersect);
             
             // fit from split index to end
-//             fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+splitIdx), nPoints-splitIdx-1, myAddr, nSets, slope, yIntersect);
+            fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+splitIdx), nPoints-splitIdx-1, myAddr, nSets, slope, yIntersect);
         }
     }
 }
@@ -117,38 +117,42 @@ __device__ __host__ bool calcContactPointClobbered(const point_t* pts, my_size_t
 
 __host__ void checkResultsClobbered(const vector<point_t>& sets_clobbered, const my_size_t* cuda_contacts, const real_t* cuda_slopes, const real_t* cuda_yIntersects, my_size_t nSets)
 {
-    #pragma omp parallel for schedule(static) 
+    const point_t* pts = sets_clobbered.data();
+    
+    #pragma omp parallel for schedule(static) default(none) shared(cerr) firstprivate(pts, cuda_contacts, cuda_slopes, nSets, cuda_yIntersects)
     for(my_size_t myAddr=0; myAddr < nSets; myAddr++)
     {
-        const my_size_t nPoints = ACCESS(sets_clobbered.data(), myAddr, nSets, 0).n;
+        const my_size_t nPoints = ACCESS(pts, myAddr, nSets, 0).n;
     
         my_size_t contactIdx;
         // get contact idx and split idx
-        bool succ = calcContactPointClobbered(&ACCESS(sets_clobbered.data(), 0, nSets, 2), nPoints, myAddr, nSets, contactIdx);
+        bool succ = calcContactPointClobbered(&ACCESS(pts, 0, nSets, 2), nPoints, myAddr, nSets, contactIdx);
         
         if(succ && contactIdx != cuda_contacts[myAddr])
         {
-            cerr << "contactIdx mismatch at set " << myAddr << ": expected " << cuda_contacts[myAddr] << "; actual " << contactIdx << endl;
+//             cerr << "contactIdx mismatch at set " << myAddr << ": expected " << cuda_contacts[myAddr] << "; actual " << contactIdx << endl;
         }
 
         // polyfit sample data (first part)
         real_t slope=0;
         real_t yIntersect=0;
-        succ = fitPointsClobbered(&ACCESS(sets_clobbered.data(), 0, nSets, 2), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
+        succ = fitPointsClobbered(&ACCESS(pts, 0, nSets, 2), contactIdx+1, // polyfit from 2 element (i.e. first data point) up to contact idx
                 myAddr, nSets, slope, yIntersect);
                 
-//         if(succ)
+        if(succ)
         {
             if(slope != cuda_slopes[myAddr])
             {
-                cerr << "slope mismatch at set " << myAddr << ": expected " << cuda_slopes[myAddr] << "; actual " << slope << endl;
+//                 cerr << "slope mismatch at set " << myAddr << ": expected " << cuda_slopes[myAddr] << "; actual " << slope << endl;
             }
             
             if(yIntersect != cuda_yIntersects[myAddr])
             {
-                cerr << "yIntersect mismatch at set " << myAddr << ": expected " << cuda_yIntersects[myAddr] << "; actual " << yIntersect << endl;
+//                 cerr << "yIntersect mismatch at set " << myAddr << ": expected " << cuda_yIntersects[myAddr] << "; actual " << yIntersect << endl;
             }
         }
+        
+        fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+contactIdx+1), nPoints-contactIdx-1, myAddr, nSets, slope, yIntersect);
     }
 }
 
@@ -188,7 +192,7 @@ __global__ void kernelSoa(const my_size_t* rowsPerThread, const point_alt_t* pts
 //             fitPointsSoa(&pts[contactIdx+1], (splitIndex-contactIdx), myAddr, nSets, slope, yIntersect);
             
             //polyfit from split idx to end
-//             fitPointsSoa(&pts[splitIndex+1], nPoints-splitIndex-1, myAddr, nSets, slope, yIntersect);
+            fitPointsSoa(&pts[splitIndex+1], nPoints-splitIndex-1, myAddr, nSets, slope, yIntersect);
         }
     }
 }
@@ -254,7 +258,7 @@ __device__ __host__ bool fitPointsSoa(const point_alt_t* pts, my_size_t nPoints,
 
 __host__ void checkResultsSoa(const my_size_t* cuda_contactsSoa, const real_t* cuda_slopesSoa, const real_t* cuda_yIntersectsSoa, const my_size_t* cuda_contacts, const real_t* cuda_slopes, const real_t* cuda_yIntersects, const my_size_t nSets)
 {
-    #pragma omp parallel for schedule(static) 
+    #pragma omp parallel for schedule(static) default(none) shared(cerr) firstprivate(cuda_contactsSoa, cuda_contacts, cuda_slopesSoa, cuda_slopes, nSets, cuda_yIntersectsSoa, cuda_yIntersects)
     for(my_size_t myAddr=0; myAddr < nSets; myAddr++)
     {
         if(cuda_contactsSoa[myAddr] != cuda_contacts[myAddr])
@@ -276,7 +280,7 @@ __host__ void checkResultsSoa(const my_size_t* cuda_contactsSoa, const real_t* c
 
 __host__ void calcCpuSoa(const my_size_t* rowsPerThread, const point_alt_t* pts, const my_size_t nSets)
 {
-    #pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(static) default(none) firstprivate(rowsPerThread,pts,nSets) 
     for(my_size_t myAddr=0; myAddr < nSets; myAddr++)
     {
         const my_size_t nPoints = rowsPerThread[myAddr];
@@ -289,6 +293,8 @@ __host__ void calcCpuSoa(const my_size_t* rowsPerThread, const point_alt_t* pts,
         real_t slope=0;
         real_t yIntersect=0;
         fitPointsSoa(&pts[0], contactIdx+1, myAddr, nSets, slope, yIntersect);
+        
+        fitPointsSoa(&pts[contactIdx+1], nPoints-contactIdx-1, myAddr, nSets, slope, yIntersect);
     }
 }
 
@@ -327,6 +333,7 @@ int main(int argc, char** argv)
         std::swap(set_extended, sets_clobbered);
     }
     
+    cout << "N Kaos Ksoa Caos Csoa" << endl;
     for(my_size_t columns=1024; columns<=realcolumns*10; columns<<=1)
     {
         my_size_t rows=realrows;
@@ -494,10 +501,12 @@ int main(int argc, char** argv)
         
         }
         
-        cout << "\n\ndatensaetze: " << columns;
-        cout << "\ngpu timing in ms:\n" << "  kernelClobbered: " << kernelClobbered_time << "\n  kernelSoa: " << kernelSoa_time << endl;
-        cout << "\ncpu timing in ms:\n" << "  cpuClobbered: " << cpuClobbered_time.count() << "\n  cpuSoa: " << cpuSoa_time.count() << endl;
+//         cout << "\n\ndatensaetze: " << columns;
+//         cout << "\ngpu timing in ms:\n" << "  kernelClobbered: " << kernelClobbered_time << "\n  kernelSoa: " << kernelSoa_time << endl;
+//         cout << "\ncpu timing in ms:\n" << "  cpuClobbered: " << cpuClobbered_time.count() << "\n  cpuSoa: " << cpuSoa_time.count() << endl;
         
+        cout << columns << " " << kernelClobbered_time << " " << kernelSoa_time << " " << cpuClobbered_time.count() << " " << cpuSoa_time.count() << endl;
+
     fail:
         for(my_size_t i=0; i<rows; i++)
         {
