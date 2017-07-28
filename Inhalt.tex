@@ -126,12 +126,12 @@ struct tuple_t { float z,f; };
 tuple_t datasets[M][N];
 \end{lstlisting}
 
-N: anzahl an datensätze
-M: anzahl an messwerten pro datensatz
+%N: anzahl an datensätze
+%M: anzahl an messwerten pro datensatz
 
-Die Auslegung der Daten als \gls{aos} bedeutet, dass die Daten als zweidimensionales Array uebergeben werden, deren Element ein Verbunddatentyp ist, welcher die gemessene Kraft f an der entsprechenden Messhöhe z enthält. Wird das Array wie in Listing \ref{aos_row} dargestellt row major im Speicher abgelegt, enthält also die i-te Speicherzeile die N Messwerte des i-ten Datensatzes.
-Die ist jedoch für Grafikkarten ungeeignet, da die Messwerte für die einzelnen Threads zu weit auseinander liegen. D.h. wird eine Cachline geladen, kann hiervon nur das erste Element (der erste Messwert) verwendet werden. Die anderen Threads benötigen ebenfalls den ersten Messwert allerdings den des ihnen zugeordneten Datensatzes. Diese befinden sich in anderen Zeilen des Speichers.
-Es müssen somit weitere Cachlines geladen werden, was schlimmsten falls zu einer Ausserialisierung der Threads führt.
+Die Auslegung der Daten als \gls{aos} bedeutet, dass die Daten als zweidimensionales Array übergeben werden, deren Element ein Verbunddatentyp ist, welcher die gemessene Kraft f an der entsprechenden Messhöhe z enthält. Wird das Array wie in Listing \ref{aos_row} dargestellt row major im Speicher abgelegt, Liegen die N Datensätze zeilenweise im Speicher, sodass die i-te Speicherzeile die M Messwerte des i-ten Datensatzes enthält.
+Dies ist jedoch für Grafikkarten ungeeignet, da die Messwerte für die einzelnen Threads zu weit auseinander liegen. D.h. wird eine Cacheline geladen, kann hiervon nur das erste Element (der erste Messwert) verwendet werden. Die anderen Threads benötigen ebenfalls den ersten Messwert allerdings den des ihnen zugeordneten Datensatzes. Diese befinden sich in anderen Zeilen des Speichers.
+Es müssen somit weitere Cachelines geladen werden, was schlimmsten falls zu einer Ausserialisierung der Threads führt.
 
 
 \begin{lstlisting}[label=aos_col,caption=\gls{aos} column major]
@@ -146,7 +146,7 @@ Es empfiehlt sich daher die Datensätze column major im Speicher abzulegen, wie 
 Bei NVidia Grafikkarten vor der Pascal Architektur erhält jeder Thread durch einen Lesevorgang ein 32 bit Wort aus der Cacheline\footnote{\href{http://docs.nvidia.com/cuda/pascal-tuning-guide/index.html\#shared-memory-bandwidth}{http://docs.nvidia.com/cuda/pascal-tuning-guide/index.html\#shared-memory-bandwidth}}. tuple\_t hat jedoch eine Größe von 8 Bytes. 
 Es braucht also zwei Lesevorgänge um alle Threads eines Warps mit Daten zu versorgen.
 Um einen Performancevergleich zu der älteren Kepler Architektur zu erhalten, wird daher auch eine \gls{soa} Variante, wie in Listing \ref{soa} dargestellt, implementiert.
-daher folgende Optimierung:
+%daher folgende Optimierung:
 
 \begin{lstlisting}[label=soa,caption=\gls{soa}]
 struct tuple_t { float z[N],f[N]; };
@@ -170,7 +170,7 @@ for (i=0; i<M; i++)
 \end{lstlisting}
 
 
-\chapter{benchmarking}
+\chapter{Benchmarking}
 %\section{lesen der textdateien}
 %von konventioneller HDD: 8MiB/s
 %von SSD:  35 MiB/s -O0
@@ -189,7 +189,11 @@ SOA Ansatz: GPU: 2.27 ms CPU: ??
 
 benchmarking mit double? verdoppelt zeit da wir genug double precision units haben aber eben zwei cachlines lesen müssen anstatt von nur einer
 
-\section{CPU vs. GPU}
+\section{CPU vs. GPU bei variierender Problemgröße}
+
+
+NVidia GeForce GTX 1060: 1280 HW-Threads; 6GB GDDR5
+Intel Core i5-3570K: 3.40 GHz; 4 HW-Threads
 
 \begin{figure}[h!]
 \centering
@@ -200,21 +204,124 @@ benchmarking mit double? verdoppelt zeit da wir genug double precision units hab
    /pgf/number format/.cd,
    use comma,
    1000 sep={},
-   xlabel=Anzahl Datensätze,xmode = log,log basis x={2},
+   xlabel=Anzahl Datensätze,xmode = log,log basis x={2},ymode = log,log basis y={2},
    ylabel=Berechnungszeit in ms]
- \addplot table [x=N,y=Kaos]{test};
-  \addplot table [x=N,y=Ksoa]{test};
-   \addplot table [x=N,y=Caos]{test};
-    \addplot table [x=N,y=Csoa]{test};
+ \addplot table [x=N,y=Kaos]{test_privat};
+  \addplot table [x=N,y=Ksoa]{test_privat};
+   \addplot table [x=N,y=Caos]{test_privat};
+    \addplot table [x=N,y=Csoa]{test_privat};
+    \addplot table [x=N,y=cpy]{test_privat};
+    \legend{GPU Kernel AoS,GPU Kernel SoA,CPU AoS, CPU SoA, cudaMemcpy}
+    
+ %\addlegendentry{$Q_A$ series}
+ \end{axis}
+ \end{tikzpicture}
+~\\~\\
+ \pgfplotstabletypeset[
+columns/N/.style={/pgf/number format/fixed, /pgf/number format/.cd,use comma,1000 sep={}},
+columns/Kaos/.style={column name={GPU Kernel AoS},/pgf/number format/.cd,use comma,1000 sep={}},
+columns/Ksoa/.style={column name={GPU Kernel SoA},/pgf/number format/.cd,use comma,1000 sep={}},
+columns/Caos/.style={column name={CPU AoS},/pgf/number format/.cd,use comma,1000 sep={}},
+columns/Csoa/.style={column name={CPU SoA},/pgf/number format/.cd,use comma,1000 sep={}},
+columns/cpy/.style={column name={cudaMemcpy},/pgf/number format/.cd,use comma,1000 sep={}}
+]{test_privat}
+\caption{Benchmark CPU vs. GPU auf Privatrechner}
+\label{fig:benchmark:privat}
+\end{figure}
+
+
+Die Berechnungszeiten steigen erwartungsgemäß linear zur Problemgröße an. Die GPU ist jedoch mit 27 ms bei $2^{20}$ Datensätzen deutlich schneller als die CPU mit bestenfalls 2,8 s. Überraschend ist auch, dass der \gls{soa} mit dem \gls{aos} Ansatz auf der GPU nahezu gleich auf liegt. Eine auf der Pascal Architektur erwartete Präferenz für den \gls{aos} Ansatz ist nicht zu erkennen.
+Zu beobachten ist auch, dass die \gls{soa} Variante auf der CPU erst ab $2^{18}$ Datensätzen besser performt als \gls{aos}. Diese Beobachtung deckt sich mit dem Benchmark auf gpu03, siehe Abbildung \ref{fig:benchmark:gpu03}.
+
+
+\begin{figure}[h!]
+\centering
+ \begin{tikzpicture}[scale=1]
+ \begin{axis}[
+   width=15cm,
+   legend style={at={(0,1)},anchor=north west},
+   /pgf/number format/.cd,
+   use comma,
+   1000 sep={},
+   xlabel=Anzahl Datensätze,xmode = log,log basis x={2},ymode = log,log basis y={2},
+   ylabel=Berechnungszeit in ms]
+ \addplot table [x=N,y=Kaos]{test_gpu03};
+  \addplot table [x=N,y=Ksoa]{test_gpu03};
+   \addplot table [x=N,y=Caos]{test_gpu03};
+    \addplot table [x=N,y=Csoa]{test_gpu03};
     \legend{GPU Kernel AoS,GPU Kernel SoA,CPU AoS, CPU SoA}
     
  %\addlegendentry{$Q_A$ series}
  \end{axis}
  \end{tikzpicture}
-\caption{Ausschnitt einer Kraft-Abstandskurve}
-\label{fig:kraftbsp}
+ ~\\~\\
+  \pgfplotstabletypeset[
+columns/N/.style={/pgf/number format/fixed, /pgf/number format/.cd,use comma,1000 sep={}},
+columns/Kaos/.style={column name={GPU Kernel AoS},/pgf/number format/.cd,use comma,1000 sep={}},
+columns/Ksoa/.style={column name={GPU Kernel SoA},/pgf/number format/.cd,use comma,1000 sep={}},
+columns/Caos/.style={column name={CPU AoS},/pgf/number format/.cd,use comma,1000 sep={}},
+columns/Csoa/.style={column name={CPU SoA},/pgf/number format/.cd,use comma,1000 sep={}},
+columns/cpy/.style={column name={cudaMemcpy},/pgf/number format/.cd,use comma,1000 sep={}}
+]{test_gpu03}
+\caption{Benchmark CPU vs. GPU auf gpu03.inf-ra.uni-jena.de}
+\label{fig:benchmark:gpu03}
 \end{figure}
 
-Während die Berechnung von $2^{20}$ Datensätzen auf der GPU nicht länger als 27 ms benötigt, steigt die Bearbeitungszeit auf der entsprechend mit der Problemgröße exponentiell an.
 
-diagramm bei variierender anz datensätze auf cpu und gpu
+Die beiden Peaks bei $2^{10}$ Datensätzen auf dem Privatrechner und bei $2^{17}$ auf gpu03 lassen sich durch Cache-Assoziativität-Effekte erklären. Normalerweise entscheidet die Speicheradresse eines Datums in welchen Teil des Caches sie abgelegt werden. Bei den erwähnten Peaks scheinen die Arrays unter den CPU Threads so ungünstig aufgeteilt zu sein, dass die Daten der einzelnen Threads aufgrund ähnlicher Speicheradressen immer an die gleiche Stelle im Cache geschrieben werden. Der Cache wird somit künstlich verkleinert und es kommt vermehrt zu Cachmisses.
+
+%Diese Vermutung bestätigt sich durch die Wahl des dynamischen schedules, bei dem eine ungleichmäßige Aufteilung des Arrays unter den Threads erfolgt. Das hierbei entstehende Benchmark ist in Abbildung \ref{fig:benchmark:privat:dynamic} dargestellt.
+%
+%
+%\begin{figure}[h!]
+%\centering
+% \begin{tikzpicture}[scale=1]
+% \begin{axis}[
+%   width=15cm,
+%   legend style={at={(0,1)},anchor=north west},
+%   /pgf/number format/.cd,
+%   use comma,
+%   1000 sep={},
+%   xlabel=Anzahl Datensätze,xmode = log,log basis x={2},ymode = log,log basis y={2},
+%   ylabel=Berechnungszeit in ms]
+% \addplot table [x=N,y=Kaos]{test_privat_dynamic};
+%  \addplot table [x=N,y=Ksoa]{test_privat_dynamic};
+%   \addplot table [x=N,y=Caos]{test_privat_dynamic};
+%    \addplot table [x=N,y=Csoa]{test_privat_dynamic};
+%    \legend{GPU Kernel AoS,GPU Kernel SoA,CPU AoS, CPU SoA}
+%    
+% %\addlegendentry{$Q_A$ series}
+% \end{axis}
+% \end{tikzpicture}
+%\caption{Benchmark CPU vs. GPU auf Privatrechner (dynamic schedule)}
+%\label{fig:benchmark:privat:dynamic}
+%\end{figure}
+%
+%
+%\begin{figure}[h!]
+%\centering
+% \begin{tikzpicture}[scale=1]
+% \begin{axis}[
+%   width=15cm,
+%   legend style={at={(0,1)},anchor=north west},
+%   /pgf/number format/.cd,
+%   use comma,
+%   1000 sep={},
+%   xlabel=Anzahl Datensätze,xmode = log,log basis x={2},ymode = log,log basis y={2},
+%   ylabel=Berechnungszeit in ms]
+% \addplot table [x=N,y=Kaos]{test_gpu03_dynamic};
+%  \addplot table [x=N,y=Ksoa]{test_gpu03_dynamic};
+%   \addplot table [x=N,y=Caos]{test_gpu03_dynamic};
+%    \addplot table [x=N,y=Csoa]{test_gpu03_dynamic};
+%    \legend{GPU Kernel AoS,GPU Kernel SoA,CPU AoS, CPU SoA}
+%    
+% %\addlegendentry{$Q_A$ series}
+% \end{axis}
+% \end{tikzpicture}
+%\caption{Benchmark CPU vs. GPU auf gpu03 (dynamic schedule)}
+%\label{fig:benchmark:privat:dynamic}
+%\end{figure}
+
+
+\chapter{Fazit}
+

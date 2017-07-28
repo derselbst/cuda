@@ -119,7 +119,7 @@ __host__ void checkResultsClobbered(const vector<point_t>& sets_clobbered, const
 {
     const point_t* pts = sets_clobbered.data();
     
-    #pragma omp parallel for schedule(static) default(none) shared(cerr) firstprivate(pts, cuda_contacts, cuda_slopes, nSets, cuda_yIntersects)
+    #pragma omp parallel for schedule(dynamic) default(none) shared(cerr) firstprivate(pts, cuda_contacts, cuda_slopes, nSets, cuda_yIntersects)
     for(my_size_t myAddr=0; myAddr < nSets; myAddr++)
     {
         const my_size_t nPoints = ACCESS(pts, myAddr, nSets, 0).n;
@@ -258,7 +258,7 @@ __device__ __host__ bool fitPointsSoa(const point_alt_t* pts, my_size_t nPoints,
 
 __host__ void checkResultsSoa(const my_size_t* cuda_contactsSoa, const real_t* cuda_slopesSoa, const real_t* cuda_yIntersectsSoa, const my_size_t* cuda_contacts, const real_t* cuda_slopes, const real_t* cuda_yIntersects, const my_size_t nSets)
 {
-    #pragma omp parallel for schedule(static) default(none) shared(cerr) firstprivate(cuda_contactsSoa, cuda_contacts, cuda_slopesSoa, cuda_slopes, nSets, cuda_yIntersectsSoa, cuda_yIntersects)
+    #pragma omp parallel for schedule(dynamic) default(none) shared(cerr) firstprivate(cuda_contactsSoa, cuda_contacts, cuda_slopesSoa, cuda_slopes, nSets, cuda_yIntersectsSoa, cuda_yIntersects)
     for(my_size_t myAddr=0; myAddr < nSets; myAddr++)
     {
         if(cuda_contactsSoa[myAddr] != cuda_contacts[myAddr])
@@ -280,7 +280,7 @@ __host__ void checkResultsSoa(const my_size_t* cuda_contactsSoa, const real_t* c
 
 __host__ void calcCpuSoa(const my_size_t* rowsPerThread, const point_alt_t* pts, const my_size_t nSets)
 {
-    #pragma omp parallel for schedule(static) default(none) firstprivate(rowsPerThread,pts,nSets) 
+    #pragma omp parallel for schedule(dynamic) default(none) firstprivate(rowsPerThread,pts,nSets) 
     for(my_size_t myAddr=0; myAddr < nSets; myAddr++)
     {
         const my_size_t nPoints = rowsPerThread[myAddr];
@@ -333,11 +333,15 @@ int main(int argc, char** argv)
         std::swap(set_extended, sets_clobbered);
     }
     
-    cout << "N Kaos Ksoa Caos Csoa" << endl;
+    cout << "N Kaos Ksoa Caos Csoa cpy" << endl;
     for(my_size_t columns=1024; columns<=realcolumns*10; columns<<=1)
     {
         my_size_t rows=realrows;
         
+        cudaEvent_t start,stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
+
         const dim3 threads(1024);
         const dim3 grid(columns/threads.x);
         
@@ -346,17 +350,19 @@ int main(int argc, char** argv)
         real_t* cuda_slopes = nullptr;
         real_t* cuda_yIntersects = nullptr;    
         if(cudaMalloc(&sets_clobbered_cuda, sizeof(*sets_clobbered_cuda) * columns*rows) != cudaSuccess) return -1;
+        
+        
+        cudaEventRecord(start);
         cudaMemcpy(sets_clobbered_cuda, sets_clobbered.data(), sizeof(*sets_clobbered_cuda) * columns*rows, cudaMemcpyHostToDevice);
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        float memcpy_time;
+        cudaEventElapsedTime(&memcpy_time, start, stop);
         
         if(cudaMalloc(&cuda_contacts, sizeof(*cuda_contacts) * columns) != cudaSuccess) return -1;
         if(cudaMalloc(&cuda_slopes, sizeof(*cuda_slopes) * columns) != cudaSuccess) return -1;
         if(cudaMalloc(&cuda_yIntersects, sizeof(*cuda_yIntersects) * columns) != cudaSuccess) return -1;
     
-        
-        cudaEvent_t start,stop;
-        cudaEventCreate(&start);
-        cudaEventCreate(&stop);
-
         cudaEventRecord(start);
         kernelClobbered<<<grid, threads>>>(sets_clobbered_cuda, columns, cuda_contacts, cuda_slopes, cuda_yIntersects);
     //    cudaDeviceSynchronize();
@@ -505,8 +511,7 @@ int main(int argc, char** argv)
 //         cout << "\ngpu timing in ms:\n" << "  kernelClobbered: " << kernelClobbered_time << "\n  kernelSoa: " << kernelSoa_time << endl;
 //         cout << "\ncpu timing in ms:\n" << "  cpuClobbered: " << cpuClobbered_time.count() << "\n  cpuSoa: " << cpuSoa_time.count() << endl;
         
-        cout << columns << " " << kernelClobbered_time << " " << kernelSoa_time << " " << cpuClobbered_time.count() << " " << cpuSoa_time.count() << endl;
-
+        cout << columns << " " << kernelClobbered_time << " " << kernelSoa_time << " " << cpuClobbered_time.count() << " " << cpuSoa_time.count() << " " << memcpy_time << endl;
     fail:
         for(my_size_t i=0; i<rows; i++)
         {
