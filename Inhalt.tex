@@ -66,6 +66,7 @@ Aufgenommen wurden solche Abtastungen an 256x*256y Positionen, wobei sowohl eine
 
 
 \section{Einlesen der Datensätze}
+\label{einlesen}
 Die Datensätze liegen als Textdeateien vor, wobei an jede Messposition in einer eigenen Datei gepsiechert ist. Es liegen somit 65536 Textdateien vor, in denen die Messwerte für das An-/ und Abfahren von der Probe zeilenweise ähnlich wie in einer CSV Datei gepseichert sind.
 Das Einlesen dieser vielen 100KiB kleinen Dateien wird durch das häufige öffnen und schließen der Dateien und dem damit verbundenen Overhead seitens des Betreibssystems verlangsamt. Zudem werden für die nötigen Berechnungen nur die ersten zwei der insgesamt 14 Datenspalten benötigt, was Caching seitens des OS zusätzlich erschwert.
 
@@ -182,7 +183,15 @@ for (i=0; i<M; i++)
 %referenz implementierung 11 minuten insgesamt
 
 
-\section{berechnung}
+\section{Berechnung}
+Eine in Python geschriebene Referenzimplementierung diente als Vorlage für die im Rahmen dieses Seminars erstellte C++ Implementierung. Sie bearbeitet die Datensätze seriell auf der CPU und benötigt dafür insgesamt 11 Minuten.
+
+Die C++ Implementierung benötigt die für die in Abschnitt \ref{einlesen} beschriebene Vorverarbeitung der Datensätze 40 Sekunden. Parallel verarbeitet werden die Datensätze schnellstenfalls in ca. 250 Millisekunden. Da die C++ Implementierung verglichen zur Referenzimplementierung aus Zeitgründen jedoch unvollständig ist, nehmen wir für die Berechnung des Speedups 1 Sekunde Bearbeitungszeit auf der CPU an.
+
+Der Speedup beider Implementierungen auf der CPU beträgt somit.
+
+$S = \dfrac{T_{seriell}}{T_{parallel}} = \dfrac{11*60}{40+1} = 16$
+
 65536*2 Datensätze:
 AoS Ansatz: GPU: 3.5 ms CPU Single: 545 ms CPU 4HWThreads: 199 ms
 SOA Ansatz: GPU: 2.27 ms CPU: ??
@@ -195,7 +204,7 @@ benchmarking mit double? verdoppelt zeit da wir genug double precision units hab
 NVidia GeForce GTX 1060: 1280 HW-Threads; 6GB GDDR5
 Intel Core i5-3570K: 3.40 GHz; 4 HW-Threads
 
-\begin{figure}[h!]
+\begin{figure}[]
 \centering
  \begin{tikzpicture}[scale=1]
  \begin{axis}[
@@ -230,11 +239,13 @@ columns/cpy/.style={column name={cudaMemcpy},/pgf/number format/.cd,use comma,10
 \end{figure}
 
 
-Die Berechnungszeiten steigen erwartungsgemäß linear zur Problemgröße an. Die GPU ist jedoch mit 27 ms bei $2^{20}$ Datensätzen deutlich schneller als die CPU mit bestenfalls 2,8 s. Überraschend ist auch, dass der \gls{soa} mit dem \gls{aos} Ansatz auf der GPU nahezu gleich auf liegt. Eine auf der Pascal Architektur erwartete Präferenz für den \gls{aos} Ansatz ist nicht zu erkennen.
+Die Berechnungszeiten steigen erwartungsgemäß linear zur Problemgröße an. Die GPU ist jedoch mit 27 ms bei $2^{20}$ Datensätzen deutlich schneller als die CPU mit bestenfalls 2,8 s. Überraschend ist auch, dass der \gls{soa} mit dem \gls{aos} Ansatz auf der GPU nahezu gleich auf liegt. Eine auf der Pascal Architektur erwartete Präferenz für den \gls{aos} Ansatz ist zwar leicht vorhanden, grenzt sich jedoch mit einem Unterschied von 5 ms bei $2^{20}$ Datensätzen nur unwesentlich vom \gls{soa} Ansatz ab.
+Erkennbar ist dass der Zugriff auf den Grafikkartenspeicher bei der Pacsal-Architektur optimiert wurde. Dennoch bleibt die PCI-E Schnittstelle ein Flaschenhals.
+
 Zu beobachten ist auch, dass die \gls{soa} Variante auf der CPU erst ab $2^{18}$ Datensätzen besser performt als \gls{aos}. Diese Beobachtung deckt sich mit dem Benchmark auf gpu03, siehe Abbildung \ref{fig:benchmark:gpu03}.
 
 
-\begin{figure}[h!]
+\begin{figure}[]
 \centering
  \begin{tikzpicture}[scale=1]
  \begin{axis}[
@@ -249,7 +260,8 @@ Zu beobachten ist auch, dass die \gls{soa} Variante auf der CPU erst ab $2^{18}$
   \addplot table [x=N,y=Ksoa]{test_gpu03};
    \addplot table [x=N,y=Caos]{test_gpu03};
     \addplot table [x=N,y=Csoa]{test_gpu03};
-    \legend{GPU Kernel AoS,GPU Kernel SoA,CPU AoS, CPU SoA}
+    \addplot table [x=N,y=cpy]{test_gpu03};
+    \legend{GPU Kernel AoS,GPU Kernel SoA,CPU AoS, CPU SoA, cudaMemcpy}
     
  %\addlegendentry{$Q_A$ series}
  \end{axis}
@@ -268,7 +280,7 @@ columns/cpy/.style={column name={cudaMemcpy},/pgf/number format/.cd,use comma,10
 \end{figure}
 
 
-Die beiden Peaks bei $2^{10}$ Datensätzen auf dem Privatrechner und bei $2^{17}$ auf gpu03 lassen sich durch Cache-Assoziativität-Effekte erklären. Normalerweise entscheidet die Speicheradresse eines Datums in welchen Teil des Caches sie abgelegt werden. Bei den erwähnten Peaks scheinen die Arrays unter den CPU Threads so ungünstig aufgeteilt zu sein, dass die Daten der einzelnen Threads aufgrund ähnlicher Speicheradressen immer an die gleiche Stelle im Cache geschrieben werden. Der Cache wird somit künstlich verkleinert und es kommt vermehrt zu Cachmisses.
+Die beiden Peaks bei $2^{10}$ Datensätzen auf dem Privatrechner und bei $2^{17}$ auf gpu03 lassen sich durch Cache-Assoziativität-Effekte erklären. Normalerweise entscheidet die Speicheradresse eines Datums in welchen Teil des Caches sie abgelegt werden. Bei den erwähnten Peaks scheinen die Arrays unter den CPU Threads so ungünstig aufgeteilt zu sein, dass die Daten der einzelnen Threads aufgrund ähnlicher Speicheradressen immer an die gleiche Stelle im Cache geschrieben werden. Der Cache wird somit künstlich verkleinert und es kommt vermehrt zu Cachemisses.
 
 %Diese Vermutung bestätigt sich durch die Wahl des dynamischen schedules, bei dem eine ungleichmäßige Aufteilung des Arrays unter den Threads erfolgt. Das hierbei entstehende Benchmark ist in Abbildung \ref{fig:benchmark:privat:dynamic} dargestellt.
 %
@@ -324,4 +336,6 @@ Die beiden Peaks bei $2^{10}$ Datensätzen auf dem Privatrechner und bei $2^{17}
 
 
 \chapter{Fazit}
-
+Die durchgeführten Tests haben gezeigt, dass sich die von Rasterelektronenmikroskopen aufgenommenen Kraft-Abstands-Messungen performant auf modernen Grafikkarten verarbeiten lassen.
+Ein nicht zu vernachlässigender Overhead stellt jedoch der Kopiervorgang der Datensätze auf den Grafikkartenspeicher dar. Eine tatsächliche Implementierung auf einer Grafikkarte würde sich erst dann bezahlt machen, wenn mit den vorhandenen Daten noch mehr Berechnungen durchgeführt werden würde, als die hier beispielhaft implementierte dreifach lineare Regression. Oder aber wenn, wie in den Benchmarks gezeigt, die Anzahl der Datensätze statt der vorhandenen $2^{17}$ beträchtlich (d.h. gegen $2^{20}$ und mehr) gesteigert werden würde.
+Anderenfalls wird der zusätzlich benötigte Entwicklungsaufwand auf einer Grafikkarte nicht gerechtfertigt, da auch ältere CPUs mit 4 Rechenkernen $2^{20}$ Datensätze in weniger als 3 Sekunden bearbeitet haben.
