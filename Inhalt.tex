@@ -186,7 +186,7 @@ for (i=0; i<M; i++)
 
 
 \section{Implementierungsvergleich bei fixer Problemgröße}
-Eine in Python geschriebene Referenzimplementierung diente als Vorlage für die im Rahmen dieses Seminars erstellte C++ Implementierung. Sie bearbeitet die Datensätze seriell auf der CPU und benötigt dafür insgesamt 11 Minuten.
+Eine in Python geschriebene Referenzimplementierung diente als Vorlage für die im Rahmen dieses Seminars erstellte C++ Implementierung. Sie bearbeitet die Datensätze seriell auf der CPU und benötigt dafür auf dem Testsystem\footnote{Testsystem: openSUSE 13.2, Linux Kernel 3.16.7 x86\_64, Intel\textregistered Core\texttrademark i5-3570K CPU (3.40GHz, 4 Rechenkerne, Hyperthreading deaktiviert), NVidia GeForce GTX 1060 (1280 HW-Threads; 6GB GDDR5), OCZ Vertex 3} insgesamt 11 Minuten.
 
 Die C++ Implementierung benötigt die für die in Abschnitt \ref{einlesen} beschriebene Vorverarbeitung der Datensätze 40 Sekunden. Parallel verarbeitet werden die $2^{17}$ Datensätze schnellstenfalls in ca. 250 Millisekunden.
 Der Speedup beider Implementierungen auf der CPU beträgt somit.
@@ -195,24 +195,43 @@ $S = \dfrac{T_{seriell}}{T_{parallel}} = \dfrac{11*60}{40+0,25} = 16,4$
 \\\\
 Zu beachten ist, dass die C++ Implementierung verglichen zur Referenzimplementierung aus Zeitgründen unvollständig ist, weshalb die Aussagekraft des Speedups mit Vorsicht zu genießen ist. Es wird jedoch erwartet, dass eine Vollständige Implementierung nicht mehr als das vierfache der hier gemessenen Zeit benötigt.
 \\\\
-Die GPU Implementierung bearbeitet die Datensätze auf der Pascal-Architektur schnellstenfalls als \gls{aos} in 1,7 Millisekunden, auf der Kepler-Architektur in 3 Millisekunden. Hinzu kommt jedoch der nicht zu vernachlässigende Overhead des Kopiervorgangs der Datensätze auf den Grafikkartenspeicher, welcher bei der Pascal-Architektur ca. 45 Millisekunden und auf der Kepler-Arch. ca. 55 Millisekunden beträgt.
+Bei der GPU Implementierung hat sich eine Threadkonfiguration von
+
+\begin{itemize}
+\item 1024 Threads pro Block auf der Pascal-Architektur und
+\item 256 Threads pro Block auf der Kepler-Architektur
+\end{itemize}
+als die performanteste Variante herausgestellt. Die Bearbeitung der Datensätze erfolgt schnellstenfalls 
+\begin{itemize}
+\item auf der Pascal-Architektur in 1,7 Millisekunden und
+\item auf der Kepler-Architektur in 3 Millisekunden.
+\end{itemize}
+Hinzu kommt jedoch der nicht zu vernachlässigende Overhead des Kopiervorgangs der Datensätze auf den Grafikkartenspeicher, welcher 
+\begin{itemize}
+\item bei der Pascal-Architektur ca. 45 Millisekunden und
+\item auf der Kepler-Arch. ca. 55 Millisekunden
+\end{itemize}
+beträgt. Es ergibt sich somit ein Speedup vorbehaltlich der unvollständigen Implementierung von
 \\\\
 $S = \dfrac{T_{seriell}}{T_{parallel}} = \dfrac{11*60}{40+0,045+0,0017} = 16,5$
 \\\\
 Darüberhinaus konnten die in Listing \ref{kernel} eingeführten Thread-Block-Synchronisationsbarrieren keine messbare Veränderung der Laufzeit hervorbringen, da bei nur 300 Messwerten pro Datensatz eine mögliche Divergenz der GPU-Threads zu gering ist.
 
-Zwar fanden alle Berechnungen, wie eingangs in Abschnitt \ref{imp_kernel} erwähnt, in single-precision float point statt. Jedoch wurde im Rahmen der Benchmarks auch ein Test mit double-precision durchgeführt. Dies hatte zur Folge, dass sich die Laufzeiten sowohl auf CPU als auch auf GPU lediglich verdoppelten, da dies auch die Größe eines tuple\_t verdoppelt und somit zwei Cachelines benötigt wurden, um alle Threads mit Daten zu versorgen.
+Zwar fanden alle Berechnungen, wie eingangs in Abschnitt \ref{imp_kernel} erwähnt, in single-precision float point statt. Jedoch wurde im Rahmen dieses Benchmarks auch ein Test mit double-precision durchgeführt. Dies hatte zur Folge, dass sich die Laufzeiten sowohl auf CPU als auch auf GPU lediglich verdoppelten, da dies die Größe eines tuple\_t verdoppelte und somit zwei Cachelines benötigt wurden, um alle Threads mit Daten zu versorgen.
 
 %benchmarking mit double? verdoppelt zeit da wir genug double precision units haben aber eben zwei cachlines lesen müssen anstatt von nur einer
 
 
 \section{CPU vs. GPU bei variierender Problemgröße}
-Die Berechnungszeiten steigen erwartungsgemäß linear zur Problemgröße an. Die GPU ist jedoch mit 27 ms bei $2^{20}$ Datensätzen deutlich schneller als die CPU mit bestenfalls 2,8 s. Überraschend ist auch, dass der \gls{soa} mit dem \gls{aos} Ansatz auf der GPU nahezu gleich auf liegt. Eine auf der Pascal Architektur erwartete Präferenz für den \gls{aos} Ansatz ist zwar leicht vorhanden, grenzt sich jedoch mit einem Unterschied von 5 ms bei $2^{20}$ Datensätzen nur unwesentlich vom \gls{soa} Ansatz ab.
-Erkennbar ist dass der Zugriff auf den Grafikkartenspeicher bei der Pacsal-Architektur optimiert wurde. Dennoch bleibt die PCI-E Schnittstelle ein Flaschenhals.
+In diesem Abschnitt soll gezeigt werden, wie performant sich die GPU Implementierung gegen die CPU schlägt wenn die Anzahl der Datensätze variiert wird. Hierzu werden jetzt bis zu $2^{20}$ Datensätze bearbeitet.
+Mehr Datensätze zu bearbeiten ist aufgrund des nur 8 GiB großen Arbeitsspeicher auf dem Testsystem mit der gegenwärtigen Implementierung nicht möglich. Der begrenzte Arbeitsspeicher ist auch ausschlaggebend, dass dieses Benchmark nur mit single-precision floats durchgeführt werden kann.
+\\\\
+Abbildungen \ref{fig:benchmark:privat} und \ref{fig:benchmark:gpu03} visualisieren die Testreihe und zeigen, dass die Berechnungszeiten erwartungsgemäß linear zur Problemgröße ansteigen. Die GPU ist jedoch mit 27 Millisekunden bei $2^{20}$ Datensätzen deutlich schneller als die CPU mit bestenfalls 2,8 Sekunden. Überraschend ist auch, dass der \gls{soa} mit dem \gls{aos} Ansatz auf der GPU nahezu gleich auf liegt. Eine auf der Pascal-Architektur erwartete Präferenz für den \gls{aos} Ansatz ist zwar leicht vorhanden, grenzt sich jedoch mit einem Unterschied von 5 ms bei $2^{20}$ Datensätzen nur unwesentlich vom \gls{soa} Ansatz ab, siehe Abbildung \ref{fig:benchmark:privat}.
+Erkennbar ist, dass der Zugriff auf den Grafikkartenspeicher bei der Pacsal-Architektur optimiert wurde. Dennoch bleibt die PCI-E Schnittstelle ein Flaschenhals.
 
 Zu beobachten ist auch, dass die \gls{soa} Variante auf der CPU erst ab $2^{18}$ Datensätzen besser performt als \gls{aos}. Diese Beobachtung deckt sich mit dem Benchmark auf gpu03, siehe Abbildung \ref{fig:benchmark:gpu03}.
 
-Die beiden Peaks bei $2^{10}$ Datensätzen auf dem Privatrechner und bei $2^{17}$ auf gpu03 lassen sich durch Cache-Assoziativität-Effekte erklären. Normalerweise entscheidet die Speicheradresse eines Datums in welchen Teil des Caches sie abgelegt werden. Bei den erwähnten Peaks scheinen die Arrays unter den CPU Threads so ungünstig aufgeteilt zu sein, dass die Daten der einzelnen Threads aufgrund ähnlicher Speicheradressen immer an die gleiche Stelle im Cache geschrieben werden. Der Cache wird somit künstlich verkleinert und es kommt vermehrt zu Cachemisses.
+Die beiden Peaks bei $2^{10}$ Datensätzen auf dem Testsystem und bei $2^{17}$ auf gpu03 lassen sich durch Cache-Assoziativitäts-Effekte erklären. Normalerweise entscheidet die Speicheradresse eines Datums in welchen Teil des Caches es abgelegt wird. Bei den erwähnten Peaks scheinen die Arrays unter den CPU Threads so ungünstig aufgeteilt zu sein, dass die Daten der einzelnen Threads aufgrund ähnlicher Speicheradressen immer an die gleiche Stelle im Cache geschrieben werden. Der Cache wird somit künstlich verkleinert und es kommt vermehrt zu Cachemisses.
 
 
 
@@ -255,7 +274,7 @@ columns/Caos/.style={column name={CPU AoS},/pgf/number format/.cd,use comma,1000
 columns/Csoa/.style={column name={CPU SoA},/pgf/number format/.cd,use comma,1000 sep={}},
 columns/cpy/.style={column name={cudaMemcpy},/pgf/number format/.cd,use comma,1000 sep={}}
 ]{test_privat}
-\caption{Benchmark CPU vs. GPU auf Privatrechner}
+\caption{Benchmark CPU vs. GPU auf Testsystem}
 \label{fig:benchmark:privat}
 \end{figure}
 
@@ -354,5 +373,5 @@ columns/cpy/.style={column name={cudaMemcpy},/pgf/number format/.cd,use comma,10
 
 \chapter{Fazit}
 Die durchgeführten Tests haben gezeigt, dass sich die von Rasterelektronenmikroskopen aufgenommenen Kraft-Abstands-Messungen performant auf modernen Grafikkarten verarbeiten lassen.
-Ein nicht zu vernachlässigender Overhead stellt jedoch der Kopiervorgang der Datensätze auf den Grafikkartenspeicher dar. Eine tatsächliche Implementierung auf einer Grafikkarte würde sich erst dann bezahlt machen, wenn mit den vorhandenen Daten noch mehr Berechnungen durchgeführt werden würde, als die hier beispielhaft implementierte dreifach lineare Regression. Oder aber wenn, wie in den Benchmarks gezeigt, die Anzahl der Datensätze statt der vorhandenen $2^{17}$ beträchtlich (d.h. gegen $2^{20}$ und mehr) gesteigert werden würde.
+Ein nicht zu vernachlässigender Overhead stellt jedoch der Kopiervorgang der Datensätze auf den Grafikkartenspeicher dar. Eine tatsächliche Implementierung auf einer Grafikkarte würde sich daher erst dann bezahlt machen, wenn mit den vorhandenen Daten noch mehr Berechnungen durchgeführt werden würden, als die hier beispielhaft implementierte dreifach lineare Regression. Oder aber wenn, wie in den Benchmarks gezeigt, die Anzahl der Datensätze statt der vorhandenen $2^{17}$ beträchtlich (d.h. gegen $2^{20}$ und mehr) gesteigert werden würde.
 Anderenfalls wird der zusätzlich benötigte Entwicklungsaufwand auf einer Grafikkarte nicht gerechtfertigt, da auch ältere CPUs mit 4 Rechenkernen $2^{20}$ Datensätze in weniger als 3 Sekunden bearbeitet haben.
