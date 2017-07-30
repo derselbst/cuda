@@ -322,19 +322,19 @@ int main(int argc, char** argv)
     in.read(reinterpret_cast<char*>(sets_clobbered.data()), sizeof(point_t) * realcolumns * realrows);
     
     {
-        vector<point_t> set_extended(realcolumns*10*realrows);
+        vector<point_t> set_extended(realcolumns*8*realrows);
         for(my_size_t row=0; row<realrows; row++)
         {
-            for(int k=0;k<10;k++)
+            for(int k=0;k<8;k++)
             {
-                memcpy(set_extended.data()+realcolumns*10*row+realcolumns*k, &ACCESS(sets_clobbered.data(), 0, realcolumns, row), sizeof(point_t)*realcolumns);
+                memcpy(set_extended.data()+realcolumns*8*row+realcolumns*k, &ACCESS(sets_clobbered.data(), 0, realcolumns, row), sizeof(point_t)*realcolumns);
             }
         }
         std::swap(set_extended, sets_clobbered);
     }
     
     cout << "N Kaos Ksoa Caos Csoa cpy" << endl;
-    for(my_size_t columns=1024; columns<=realcolumns*10; columns<<=1)
+    for(my_size_t columns=1024; columns<=realcolumns*8; columns<<=1)
     {
         my_size_t rows=realrows;
         
