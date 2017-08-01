@@ -1,9 +1,8 @@
 
 \chapter{Notwendigkeit paralleler Programmierung}
 \label{intro}
-Seit Beginn der Rechentechnik Anfang der 40er Jahre verfolgen Informatiker das Ziel die zur Verfügung stehende Rechenleistung effizient zu nutzen.
-
-Die parallele Programmierung stellt eine wesentliche Maßnahme dar, um dieses Ziel zu erreichen. Mit dieser Arbeit  soll die Umsetzung eines gegebenen Problems auf einer Grafikkarte mittels nVidia CUDA vorgestellt werden.
+Seit Beginn der Rechentechnik, Anfang der 40er Jahre, verfolgen Informatiker das Ziel, die zur Verfügung stehende Rechenleistung effizient zu nutzen.
+Die parallele Programmierung stellt eine wesentliche Maßnahme dar, um dieses Ziel zu erreichen. Mit dieser Arbeit soll die Umsetzung eines gegebenen Problems auf einer Grafikkarte mittels nVidia CUDA vorgestellt werden.
 
 Parallele Programme beschreiben potentiell gleichzeitig ablaufende Aktivitäten, die miteinander kooperieren, um eine gemeinsame Aufgabe zu lösen. Dies setzt Programme voraus, die unabhängig von der Anzahl und der Geschwindigkeit der Prozessoren die gewünschten Ergebnisse liefern. Die Softwareentwicklung für parallele Algorithmen ist deshalb im Vergleich zur sequentiellen Programmierung wesentlich komplexer.
 
@@ -24,12 +23,12 @@ Mit der Einführung von Threads werden im wesentlichen zwei Ziele verfolgt:
 Die Leistungsfähigkeit von Programmen ist hauptsächlich abhängig von der Taktrate der CPU. Erhöht sich die Taktrate, wird ebenso das Programm schneller.
 Allerdings haben die Taktraten heutiger CPUs einen Grenzwert erreicht.
 Größere Taktraten würden diverse technische Probleme mit sich bringen, wie beispielsweise erhöhte Wärmeentwicklung auf dem Prozessor und damit verbundene, eine geeignete Wärmeabfuhr zu finden.
-Daher gehen Chiphersteller schon seit einigen Jahren den Weg, möglichst viele Recheneinheiten (Kerne) auf einer CPU unterzubringen. Grafikprozessoren sind von Haus aus mit einer deutlich größeren Anzahl an Kernen ausgestattet.
-Programme die entsprechend implementiert wurde diese Technologien effizient zu nutzen, können einen deutlichen Geschwindigkeitsvorteil gegenüber einer parallelen Ausführung auf einer CPU aufweisen.
+Daher gehen Chiphersteller schon seit einigen Jahren den Weg, möglichst viele Recheneinheiten (Kerne) auf einer CPU unterzubringen. Grafikprozessoren sind mit einer deutlich größeren Anzahl an Kernen ausgestattet.
+Programme die entsprechend implementiert wurden, um diese Technologien effizient zu nutzen, können einen deutlichen Geschwindigkeitsvorteil gegenüber einer parallelen Ausführung auf einer CPU aufweisen.
 
 
 \chapter{Aufgabenstellung}
-Gegeben Kraft-Abstandskurven eines Rasterkraftmikroskops. Rasterkraftmikroskope werden zur Untersuchung von Oberflächen genutzt, um bspw. ein Höhenprofil erstellen zu können. Hierzu wird die vorliegende Oberfläche an möglichst vielen Stellen mit einer ca. 40 nm großen Spitze abgetastet, d.h. es wird zu jeder Messhöhe die der Abtastspitze entgegengebrachte Kraft gemessen.
+Gegeben sind Kraft-Abstandskurven eines Rasterkraftmikroskops. Rasterkraftmikroskope werden zur Untersuchung von Oberflächen genutzt, um bspw. ein Höhenprofil erstellen zu können. Hierzu wird die vorliegende Oberfläche an möglichst vielen Stellen mit einer ca. 40 nm großen Spitze abgetastet, d.h. es wird zu jeder Messhöhe die der Abtastspitze entgegengebrachte Kraft gemessen.
 Der Verlauf einer solchen Kraft-Abstandskurve lässt sich in drei lineare Funktionen unterteilen und ist qualitativ in Abbildung \ref{fig:kraftqual} dargestellt.
 
 \begin{figure}[h!]
@@ -40,7 +39,7 @@ Der Verlauf einer solchen Kraft-Abstandskurve lässt sich in drei lineare Funkti
 \end{figure}
 
 Der grüne Kurvenverlauf stellt die Annäherung der Abtastspitze zur Probe dar. Auffällig ist, dass die entgegengebrachte Kraft bei diesem Vorgang konstant bleibt.
-Die gelbe Kurve zeigt, wie die Spitze von den Adhäsionskraften zwischen ihr und der Probe erfasst wird. Die entgegengebrachte Kraft fällt daher rapide ab, bis die Spitze Kontakt mit der Probe hergestellt hat.
+Die gelbe Kurve zeigt, wie die Spitze von den Adhäsionskräften zwischen ihr und der Probe erfasst wird. Die entgegengebrachte Kraft fällt daher rapide ab, bis die Spitze Kontakt mit der Probe hergestellt hat.
 Der rote Kurvenabschnitt zeigt, wie die auf die Spitze einwirkende Kraft nach Kontaktherstellung stark zunimmt, während weiterhin versucht wird, sich der Probe anzunähern.
 \\\\
 Ziel ist es nun, die gegebene Punktewolke eines realen Rasterkraftmikroskops in diese drei linearen Funktionen zu zerlegen.
@@ -67,14 +66,14 @@ Aufgenommen wurden solche Abtastungen an 256x*256y Positionen, wobei sowohl eine
 \pagebreak
 \section{Einlesen der Datensätze}
 \label{einlesen}
-Die Datensätze liegen als Textdeateien vor, wobei an jede Messposition in einer eigenen Datei gepsiechert ist. Es liegen somit 65536 Textdateien vor, in denen die Messwerte für das An-/ und Abfahren von der Probe zeilenweise ähnlich wie in einer CSV Datei gepseichert sind.
-Das Einlesen dieser vielen 100KiB kleinen Dateien wird durch das häufige öffnen und schließen der Dateien und dem damit verbundenen Overhead seitens des Betreibssystems verlangsamt. Zudem werden für die nötigen Berechnungen nur die ersten zwei der insgesamt 14 Datenspalten benötigt, was Caching seitens des OS zusätzlich erschwert.
+Die Datensätze liegen als Textdeateien vor, wobei jede Messposition in einer eigenen Datei gespeichert ist. Es existieren somit 65536 Textdateien, in denen die Messwerte für das An- und Abfahren von der Probe zeilenweise ähnlich wie in einer CSV Datei gespeichert sind.
+Das Einlesen dieser vielen 100 KiB kleinen Dateien wird durch das häufige öffnen und schließen der Dateien und dem damit verbundenen Overhead seitens des Betriebssystems verlangsamt. Zudem werden für die nötigen Berechnungen nur die ersten zwei der insgesamt 14 Datenspalten benötigt, was Caching seitens des OS zusätzlich erschwert.
 
 
-Das Einlesen aller 65536 Textdateien benötigt auf einer SSD\footnote{Testsystem: openSUSE 13.2, Linux Kernel 3.16.7 x86\_64, OCZ Vertex 3} 2 Minuten. Dies kann auf 40 Sekunden reduziert werden, wenn das Einlesen mittels openMP Tasks parallelisiert erfolgt.
+Das Einlesen aller 65536 Textdateien benötigt auf einer SSD\footnote{Testsystem: openSUSE 13.2, Linux Kernel 3.16.7 x86\_64, OCZ Vertex 3} ca. 2 Minuten. Dies kann auf 40 Sekunden reduziert werden, wenn das Einlesen mittels openMP Tasks parallelisiert erfolgt.
 Der Einlesevorgang auf einer konventionellen HDD benötigt aufgrund der trägen Mechanik hingegen mind. 10 Minuten.
 
-Um dies zu umgehen ist eine Vorverarbeitung nötig, die darin besteht, die Textdateien einmalig einzulesen, die Daten zu filtern und zu sortieren und sie anschließend als Binär Blob auszugeben. Der Einlesevorgang kann somit auf wenige Sekunden reduziert werden.
+Um dies zu umgehen, ist eine Vorverarbeitung nötig, die darin besteht, die Textdateien einmalig einzulesen, die Daten zu filtern, zu sortieren und sie anschließend als Binär Blob auszugeben. Der Einlesevorgang kann somit auf wenige Sekunden reduziert werden.
 
 \pagebreak
 \section{Implementierung des Kernels}
@@ -134,7 +133,7 @@ tuple_t datasets[M][N];
 
 Die Auslegung der Daten als \gls{aos} bedeutet, dass die Daten als zweidimensionales Array übergeben werden, deren Element ein Verbunddatentyp ist, welcher die gemessene Kraft f an der entsprechenden Messhöhe z enthält. Wird das Array wie in Listing \ref{aos_row} dargestellt row major im Speicher abgelegt, liegen die N Datensätze zeilenweise im Speicher, sodass die i-te Speicherzeile die M Messwerte des i-ten Datensatzes enthält.
 Dies ist jedoch für Grafikkarten ungeeignet, da die Messwerte für die einzelnen Threads zu weit auseinander liegen. D.h. wird eine Cacheline geladen, kann hiervon nur das erste Element (der erste Messwert) verwendet werden. Die anderen Threads benötigen ebenfalls den ersten Messwert allerdings den des ihnen zugeordneten Datensatzes. Diese befinden sich in anderen Zeilen des Speichers.
-Es müssen somit weitere Cachelines geladen werden, was schlimmsten falls zu einer Ausserialisierung der Threads führt.
+Es müssen somit weitere Cachelines geladen werden, was schlimmstenfalls zu einer Ausserialisierung der Threads führt.
 
 
 \begin{lstlisting}[label=aos_col,caption=Datenlayout \gls{aos} column major]
@@ -142,7 +141,7 @@ struct tuple_t { float z,f; };
 tuple_t datasets[N][M];
 \end{lstlisting}
 
-Es empfiehlt sich daher die Datensätze column major im Speicher abzulegen, wie in Listing \ref{aos_col} dargestellt. Die i-te Zeile des Speichers enthält somit die i-ten Messwerte aller Datensätze. Da jeder Thread einen Datensatz bearbeitet, können alle 32 Threads eines Warps durch eine Cacheline mit Daten versorgt werden.
+Es empfiehlt sich daher, die Datensätze column major im Speicher abzulegen, wie in Listing \ref{aos_col} dargestellt. Die i-te Zeile des Speichers enthält somit die i-ten Messwerte aller Datensätze. Da jeder Thread einen Datensatz bearbeitet, können alle 32 Threads eines Warps durch eine Cacheline mit Daten versorgt werden.
 
 
 \subsection{\acrlong{soa}}
@@ -193,7 +192,7 @@ Der Speedup beider Implementierungen auf der CPU beträgt somit.
 \\\\
 $S = \dfrac{T_{seriell}}{T_{parallel}} = \dfrac{11*60}{40+0,25} = 16,4$
 \\\\
-Zu beachten ist, dass die C++ Implementierung verglichen zur Referenzimplementierung aus Zeitgründen unvollständig ist, weshalb die Aussagekraft des Speedups mit Vorsicht zu genießen ist. Es wird jedoch erwartet, dass eine Vollständige Implementierung nicht mehr als das vierfache der hier gemessenen Zeit benötigt.
+Zu beachten ist, dass die C++ Implementierung verglichen zur Referenzimplementierung aus Zeitgründen unvollständig ist, weshalb die Aussagekraft des Speedups mit Vorsicht zu genießen ist. Es wird jedoch erwartet, dass eine vollständige Implementierung nicht mehr als das vierfache der hier gemessenen Zeit benötigt.
 \\\\
 Bei der GPU Implementierung hat sich eine Threadkonfiguration von
 
@@ -215,9 +214,9 @@ beträgt. Es ergibt sich somit ein Speedup vorbehaltlich der unvollständigen Im
 \\\\
 $S = \dfrac{T_{seriell}}{T_{parallel}} = \dfrac{11*60}{40+0,045+0,0017} = 16,5$
 \\\\
-Darüberhinaus konnten die in Listing \ref{kernel} eingeführten Thread-Block-Synchronisationsbarrieren keine messbare Veränderung der Laufzeit hervorbringen, da bei nur 300 Messwerten pro Datensatz eine mögliche Divergenz der GPU-Threads zu gering ist.
+Darüberhinaus konnten die in Listing \ref{kernel} eingeführten Thread-Block-Synchronisations\-barrieren keine messbare Veränderung der Laufzeit hervorbringen, da bei nur 300 Messwerten pro Datensatz eine mögliche Divergenz der GPU-Threads zu gering ist.
 
-Zwar fanden alle Berechnungen, wie eingangs in Abschnitt \ref{imp_kernel} erwähnt, in single-precision float point statt. Jedoch wurde im Rahmen dieses Benchmarks auch ein Test mit double-precision durchgeführt. Dies hatte zur Folge, dass sich die Laufzeiten sowohl auf CPU als auch auf GPU lediglich verdoppelten, da dies die Größe eines tuple\_t verdoppelte und somit zwei Cachelines benötigt wurden, um alle Threads mit Daten zu versorgen.
+Zwar fanden alle Berechnungen, wie eingangs in Abschnitt \ref{imp_kernel} erwähnt, in single-precision floating point statt. Jedoch wurde im Rahmen dieses Benchmarks auch ein Test mit double-precision durchgeführt. Dies hatte zur Folge, dass sich die Laufzeiten sowohl auf CPU als auch auf GPU lediglich verdoppelten, da dies die Größe eines tuple\_t verdoppelte und somit zwei Cachelines benötigt wurden, um alle Threads mit Daten zu versorgen.
 
 %benchmarking mit double? verdoppelt zeit da wir genug double precision units haben aber eben zwei cachlines lesen müssen anstatt von nur einer
 
@@ -226,7 +225,7 @@ Zwar fanden alle Berechnungen, wie eingangs in Abschnitt \ref{imp_kernel} erwäh
 In diesem Abschnitt soll gezeigt werden, wie performant sich die GPU Implementierung gegen die CPU schlägt wenn die Anzahl der Datensätze variiert wird. Hierzu werden jetzt bis zu $2^{20}$ Datensätze bearbeitet.
 Mehr Datensätze zu bearbeiten ist aufgrund des nur 8 GiB großen Arbeitsspeicher auf dem Testsystem mit der gegenwärtigen Implementierung nicht möglich. Der begrenzte Arbeitsspeicher ist auch ausschlaggebend, dass dieses Benchmark nur mit single-precision floats durchgeführt werden kann.
 \\\\
-Abbildungen \ref{fig:benchmark:privat} und \ref{fig:benchmark:gpu03} visualisieren die Testreihe und zeigen, dass die Berechnungszeiten erwartungsgemäß linear zur Problemgröße ansteigen. Die GPU ist jedoch mit 27 Millisekunden bei $2^{20}$ Datensätzen deutlich schneller als die CPU mit bestenfalls 2,8 Sekunden. Überraschend ist auch, dass der \gls{soa} mit dem \gls{aos} Ansatz auf der GPU nahezu gleich auf liegt. Eine auf der Pascal-Architektur erwartete Präferenz für den \gls{aos} Ansatz ist zwar leicht vorhanden, grenzt sich jedoch mit einem Unterschied von 5 ms bei $2^{20}$ Datensätzen nur unwesentlich vom \gls{soa} Ansatz ab, siehe Abbildung \ref{fig:benchmark:privat}.
+Abbildungen \ref{fig:benchmark:privat} und \ref{fig:benchmark:gpu03} visualisieren die Testreihe und zeigen, dass die Berechnungszeiten erwartungsgemäß linear zur Problemgröße ansteigen. Die GPU ist jedoch mit 27 Millisekunden bei $2^{20}$ Datensätzen deutlich schneller als die CPU mit bestenfalls 2,8 Sekunden. Überraschend ist auch, dass der \gls{soa} mit dem \gls{aos} Ansatz auf der GPU nahezu gleich auf liegt. Eine auf der Pascal-Architektur erwartete Präferenz für den \gls{aos} Ansatz ist zwar leicht vorhanden, grenzt sich jedoch mit einem Unterschied von 5 Millisekunden bei $2^{20}$ Datensätzen nur unwesentlich vom \gls{soa} Ansatz ab, siehe Abbildung \ref{fig:benchmark:privat}.
 Erkennbar ist, dass der Zugriff auf den Grafikkartenspeicher bei der Pacsal-Architektur optimiert wurde. Dennoch bleibt die PCI-E Schnittstelle ein Flaschenhals.
 
 Zu beobachten ist auch, dass die \gls{soa} Variante auf der CPU erst ab $2^{18}$ Datensätzen besser performt als \gls{aos}. Diese Beobachtung deckt sich mit dem Benchmark auf gpu03, siehe Abbildung \ref{fig:benchmark:gpu03}.
