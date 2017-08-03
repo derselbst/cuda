@@ -173,19 +173,25 @@ for (i=0; i<M; i++)
 
 
 \chapter{Benchmarking}
-%\section{lesen der textdateien}
-%von konventioneller HDD: 8MiB/s
-%von SSD:  35 MiB/s -O0
-%70 MiB/s -O2
-%41 s bei 190 MiB/s -O2 paralleles lesen mit openmp tasks
-%
-%referenz implementierung 11 MiB/s von SSD
-%
-%referenz implementierung 11 minuten insgesamt
+In diesem Abschnitt wird die entwickelte Implementierung getestet. Die Tests erfolgen hauptsaechlich auf dem Privatrechner des Authors, welcher im Folgenden als Testsystem bezeichnet wird. Es verfuegt ueber folgende Spezifikationen:
 
+\begin{itemize}
+\item OS: openSUSE 13.2, Linux Kernel 3.16.7 x86\_64
+\item CPU: Intel\textregistered Core\texttrademark i5-3570K (3.40GHz, 4 Rechenkerne, Hyperthreading deaktiviert)
+\item GPU: NVidia GeForce GTX 1060 (Pascal Architektur, 1280 HW-Threads, 6GB GDDR5)
+\item SSD: OCZ Vertex 3
+\end{itemize}
+
+Darueberhinaus finden Tests auf gpu03.inf-ra.uni-jena.de, nachfolgend als gpu03 bezeichnet:
+
+\begin{itemize}
+\item OS: Ubuntu 14.04.5 LTS, Linux Kernel 3.13.0 x86\_64
+\item CPU: Intel\textregistered Core\texttrademark i7-4770 (3.40GHz, 4 Rechenkerne, Hyperthreading aktiviert)
+\item GPU: NVidia GeForce GTX 780 (Kepler Architektur, 2304 HW-Threads, 3GB GDDR5)
+\end{itemize}
 
 \section{Implementierungsvergleich bei fixer Problemgröße}
-Eine in Python geschriebene Referenzimplementierung diente als Vorlage für die im Rahmen dieses Seminars erstellte C++ Implementierung. Sie bearbeitet die Datensätze seriell auf der CPU und benötigt dafür auf dem Testsystem\footnote{Testsystem: openSUSE 13.2, Linux Kernel 3.16.7 x86\_64, Intel\textregistered Core\texttrademark i5-3570K CPU (3.40GHz, 4 Rechenkerne, Hyperthreading deaktiviert), NVidia GeForce GTX 1060 (1280 HW-Threads; 6GB GDDR5), OCZ Vertex 3} insgesamt 11 Minuten.
+Eine in Python geschriebene Referenzimplementierung diente als Vorlage für die im Rahmen dieses Seminars erstellte C++ Implementierung. Sie bearbeitet die Datensätze seriell auf der CPU und benötigt dafür auf dem Testsystem insgesamt 11 Minuten.
 
 Die C++ Implementierung benötigt die für die in Abschnitt \ref{einlesen} beschriebene Vorverarbeitung der Datensätze 40 Sekunden. Parallel verarbeitet werden die $2^{17}$ Datensätze schnellstenfalls in ca. 250 Millisekunden.
 Der Speedup beider Implementierungen auf der CPU beträgt somit.
@@ -208,7 +214,7 @@ als die performanteste Variante herausgestellt. Die Bearbeitung der Datensätze 
 Hinzu kommt jedoch der nicht zu vernachlässigende Overhead des Kopiervorgangs der Datensätze auf den Grafikkartenspeicher, welcher 
 \begin{itemize}
 \item bei der Pascal-Architektur ca. 45 Millisekunden und
-\item auf der Kepler-Arch. ca. 55 Millisekunden
+\item auf der Kepler-Architektur ca. 55 Millisekunden
 \end{itemize}
 beträgt. Es ergibt sich somit ein Speedup vorbehaltlich der unvollständigen Implementierung von
 \\\\
@@ -313,7 +319,7 @@ columns/Caos/.style={column name={CPU AoS},/pgf/number format/.cd,use comma,1000
 columns/Csoa/.style={column name={CPU SoA},/pgf/number format/.cd,use comma,1000 sep={}},
 columns/cpy/.style={column name={cudaMemcpy},/pgf/number format/.cd,use comma,1000 sep={}}
 ]{test_gpu03}
-\caption{Benchmark CPU vs. GPU auf gpu03.inf-ra.uni-jena.de}
+\caption{Benchmark CPU vs. GPU auf gpu03}
 \label{fig:benchmark:gpu03}
 \end{figure}
 
