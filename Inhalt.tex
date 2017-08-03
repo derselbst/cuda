@@ -2,11 +2,11 @@
 \chapter{Notwendigkeit paralleler Programmierung}
 \label{intro}
 Seit Beginn der Rechentechnik, Anfang der 40er Jahre, verfolgen Informatiker das Ziel, die zur Verfügung stehende Rechenleistung effizient zu nutzen.
-Die parallele Programmierung stellt eine wesentliche Maßnahme dar, um dieses Ziel zu erreichen. Mit dieser Arbeit soll die Umsetzung eines gegebenen Problems auf einer Grafikkarte mittels nVidia CUDA vorgestellt werden.
+Die parallele Programmierung stellt eine wesentliche Maßnahme dar, um dieses Ziel zu erreichen. Mit dieser Arbeit soll die Umsetzung eines gegebenen Problems auf einer Grafikkarte mittels NVidia CUDA vorgestellt werden.
 
 Parallele Programme beschreiben potentiell gleichzeitig ablaufende Aktivitäten, die miteinander kooperieren, um eine gemeinsame Aufgabe zu lösen. Dies setzt Programme voraus, die unabhängig von der Anzahl und der Geschwindigkeit der Prozessoren die gewünschten Ergebnisse liefern. Die Softwareentwicklung für parallele Algorithmen ist deshalb im Vergleich zur sequentiellen Programmierung wesentlich komplexer.
 
-Durch die Aufteilung eines Programms in sogenannte \textbf{Threads} (\glqq leichtgewichtige Prozesse\grqq) lassen sich die Ressourcen heutiger Mirkoprozessoren effizient nutzen.
+Durch die Aufteilung eines Programms in sogenannte \textbf{Threads} (\glqq leichtgewichtige Prozesse\grqq) lassen sich die Ressourcen heutiger Mikroprozessoren effizient nutzen.
 Threads besitzen dabei folgende Eigenschaften:
 \begin{itemize}
 \item sind sequentielle Befehlsausführungen
@@ -66,7 +66,7 @@ Aufgenommen wurden solche Abtastungen an 256x*256y Positionen, wobei sowohl eine
 \pagebreak
 \section{Einlesen der Datensätze}
 \label{einlesen}
-Die Datensätze liegen als Textdeateien vor, wobei jede Messposition in einer eigenen Datei gespeichert ist. Es existieren somit 65536 Textdateien, in denen die Messwerte für das An- und Abfahren von der Probe zeilenweise ähnlich wie in einer CSV Datei gespeichert sind.
+Die Datensätze liegen als Textdateien vor, wobei jede Messposition in einer eigenen Datei gespeichert ist. Es existieren somit 65536 Textdateien, in denen die Messwerte für das An- und Abfahren von der Probe zeilenweise ähnlich wie in einer CSV Datei gespeichert sind.
 Das Einlesen dieser vielen 100 KiB kleinen Dateien wird durch das häufige öffnen und schließen der Dateien und dem damit verbundenen Overhead seitens des Betriebssystems verlangsamt. Zudem werden für die nötigen Berechnungen nur die ersten zwei der insgesamt 14 Datenspalten benötigt, was Caching seitens des OS zusätzlich erschwert.
 
 
@@ -173,20 +173,20 @@ for (i=0; i<M; i++)
 
 
 \chapter{Benchmarking}
-In diesem Abschnitt wird die entwickelte Implementierung getestet. Die Tests erfolgen hauptsaechlich auf dem Privatrechner des Authors, welcher im Folgenden als Testsystem bezeichnet wird. Es verfuegt ueber folgende Spezifikationen:
+In diesem Abschnitt wird die entwickelte Implementierung getestet. Die Tests erfolgen hauptsächlich auf dem Privatrechner des Autors, welcher im Folgenden als Testsystem bezeichnet wird. Es verfügt über folgende Spezifikationen:
 
 \begin{itemize}
 \item OS: openSUSE 13.2, Linux Kernel 3.16.7 x86\_64
-\item CPU: Intel\textregistered Core\texttrademark i5-3570K (3.40GHz, 4 Rechenkerne, Hyperthreading deaktiviert)
+\item CPU: Intel Core i5-3570K (3.40GHz, 4 Rechenkerne, Hyperthreading deaktiviert)
 \item GPU: NVidia GeForce GTX 1060 (Pascal Architektur, 1280 HW-Threads, 6GB GDDR5)
-\item SSD: OCZ Vertex 3
+%\item SSD: OCZ Vertex 3
 \end{itemize}
 
-Darueberhinaus finden Tests auf gpu03.inf-ra.uni-jena.de, nachfolgend als gpu03 bezeichnet:
+Darüberhinaus finden Tests auf gpu03.inf-ra.uni-jena.de, nachfolgend als gpu03 bezeichnet, um einen Performancevergleich zu NVidias Kepler Architektur zu erhalten.
 
 \begin{itemize}
 \item OS: Ubuntu 14.04.5 LTS, Linux Kernel 3.13.0 x86\_64
-\item CPU: Intel\textregistered Core\texttrademark i7-4770 (3.40GHz, 4 Rechenkerne, Hyperthreading aktiviert)
+\item CPU: Intel Core i7-4770 (3.40GHz, 4 Rechenkerne, Hyperthreading aktiviert)
 \item GPU: NVidia GeForce GTX 780 (Kepler Architektur, 2304 HW-Threads, 3GB GDDR5)
 \end{itemize}
 
@@ -226,13 +226,13 @@ Zwar fanden alle Berechnungen, wie eingangs in Abschnitt \ref{imp_kernel} erwäh
 
 %benchmarking mit double? verdoppelt zeit da wir genug double precision units haben aber eben zwei cachlines lesen müssen anstatt von nur einer
 
-
+\pagebreak
 \section{CPU vs. GPU bei variierender Problemgröße}
 In diesem Abschnitt soll gezeigt werden, wie performant sich die GPU Implementierung gegen die CPU schlägt wenn die Anzahl der Datensätze variiert wird. Hierzu werden jetzt bis zu $2^{20}$ Datensätze bearbeitet.
 Mehr Datensätze zu bearbeiten ist aufgrund des nur 8 GiB großen Arbeitsspeicher auf dem Testsystem mit der gegenwärtigen Implementierung nicht möglich. Der begrenzte Arbeitsspeicher ist auch ausschlaggebend, dass dieses Benchmark nur mit single-precision floats durchgeführt werden kann.
 \\\\
 Abbildungen \ref{fig:benchmark:privat} und \ref{fig:benchmark:gpu03} visualisieren die Testreihe und zeigen, dass die Berechnungszeiten erwartungsgemäß linear zur Problemgröße ansteigen. Die GPU ist jedoch mit 27 Millisekunden bei $2^{20}$ Datensätzen deutlich schneller als die CPU mit bestenfalls 2,8 Sekunden. Überraschend ist auch, dass der \gls{soa} mit dem \gls{aos} Ansatz auf der GPU nahezu gleich auf liegt. Eine auf der Pascal-Architektur erwartete Präferenz für den \gls{aos} Ansatz ist zwar leicht vorhanden, grenzt sich jedoch mit einem Unterschied von 5 Millisekunden bei $2^{20}$ Datensätzen nur unwesentlich vom \gls{soa} Ansatz ab, siehe Abbildung \ref{fig:benchmark:privat}.
-Erkennbar ist, dass der Zugriff auf den Grafikkartenspeicher bei der Pacsal-Architektur optimiert wurde. Dennoch bleibt die PCI-E Schnittstelle ein Flaschenhals.
+Erkennbar ist, dass der Zugriff auf den Grafikkartenspeicher bei der Pascal-Architektur optimiert wurde. Dennoch bleibt die PCI-E Schnittstelle ein Flaschenhals.
 
 Zu beobachten ist auch, dass die \gls{soa} Variante auf der CPU erst ab $2^{18}$ Datensätzen besser performt als \gls{aos}. Diese Beobachtung deckt sich mit dem Benchmark auf gpu03, siehe Abbildung \ref{fig:benchmark:gpu03}.
 

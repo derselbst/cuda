@@ -55,7 +55,7 @@ __global__ void kernelClobbered(const point_t* pts, const my_size_t nSets, my_si
             
             // fit from contact point to split index (guessed)
             my_size_t splitIdx = contactIdx+10;
-//             fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+(contactIdx+1)), (splitIdx-contactIdx), myAddr, nSets, slope, yIntersect);
+            fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+(contactIdx+1)), (splitIdx-contactIdx), myAddr, nSets, slope, yIntersect);
             
             // fit from split index to end
             fitPointsClobbered(&ACCESS(pts, 0, nSets, 2+splitIdx), nPoints-splitIdx-1, myAddr, nSets, slope, yIntersect);
@@ -189,7 +189,7 @@ __global__ void kernelSoa(const my_size_t* rowsPerThread, const point_alt_t* pts
             // guess split index
             my_size_t splitIndex = contactIdx+10;
             // polyfit from contactidx to splitidx
-//             fitPointsSoa(&pts[contactIdx+1], (splitIndex-contactIdx), myAddr, nSets, slope, yIntersect);
+            fitPointsSoa(&pts[contactIdx+1], (splitIndex-contactIdx), myAddr, nSets, slope, yIntersect);
             
             //polyfit from split idx to end
             fitPointsSoa(&pts[splitIndex+1], nPoints-splitIndex-1, myAddr, nSets, slope, yIntersect);
@@ -506,10 +506,6 @@ int main(int argc, char** argv)
         checkResultsSoa(contactResultsSoa.data(), slopesResultsSoa.data(), yIntsctResultsSoa.data(), contactResults.data(), slopesResults.data(), yIntsctResults.data(), columns);
         
         }
-        
-//         cout << "\n\ndatensaetze: " << columns;
-//         cout << "\ngpu timing in ms:\n" << "  kernelClobbered: " << kernelClobbered_time << "\n  kernelSoa: " << kernelSoa_time << endl;
-//         cout << "\ncpu timing in ms:\n" << "  cpuClobbered: " << cpuClobbered_time.count() << "\n  cpuSoa: " << cpuSoa_time.count() << endl;
         
         cout << columns << " " << kernelClobbered_time << " " << kernelSoa_time << " " << cpuClobbered_time.count() << " " << cpuSoa_time.count() << " " << memcpy_time << endl;
     fail:
